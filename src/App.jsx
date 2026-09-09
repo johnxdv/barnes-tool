@@ -1,43 +1,49 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Check } from 'lucide-react'
 import { EstimationAddressStep } from './components/estimation/EstimationAddressStep'
 import { EstimationBuildingStep } from './components/estimation/EstimationBuildingStep'
 import { EstimationLoadingStep } from './components/estimation/EstimationLoadingStep'
-import { EstimationResultStep } from './components/estimation/EstimationResultStep'
+import { EstimationCharacteristicsStep } from './components/estimation/EstimationCharacteristicsStep'
+// EstimationResultStep n'est plus dans l'enchaînement — le fichier est conservé,
+// il sera rebranché quand l'affichage du prix reviendra après « caractéristiques ».
 import { requestEstimation } from './lib/estimation'
-import { EASE } from './lib/motion'
 
 /**
  * Étapes majeures du parcours, dans l'ordre — base de la barre de progression
- * globale. L'écran résultat couvre à la fois le repos, la conversation de
- * capture et la confirmation finale : les trois se jouent sur le même écran.
+ * globale : adresse → bâtiment → analyse → caractéristiques.
+ *
+ * L'étape `resultat` (affichage du prix) est temporairement retirée : l'analyse
+ * enchaîne désormais sur le formulaire de caractéristiques, qui n'a encore rien
+ * après lui (écran « à suivre »).
  */
-const STAGES = ['adresse', 'batiment', 'analyse', 'resultat']
+const STAGES = ['adresse', 'batiment', 'analyse', 'caracteristiques']
 
 /**
  * Outil d'estimation — parcours en écrans successifs dans une même page (aucune
  * navigation d'URL entre les étapes) : saisie de l'adresse, repérage du
- * bâtiment sur photo aérienne, analyse, puis résultat flouté avec conversation
- * de capture intégrée qui se conclut sur la confirmation et le déblocage du
- * prix.
+ * bâtiment sur photo aérienne, analyse, puis saisie des caractéristiques
+ * détaillées du bien.
  *
- * Le montant est calculé pour de bon : le clic sur « Obtenir une estimation
- * instantanée » lance la requête au moteur (`api/estimation.js`, base DVF) en
- * même temps que l'animation d'analyse, et le résultat est appliqué à la fin
- * de celle-ci.
+ * Le montant est tout de même calculé : `requestEstimation` part au lancement
+ * de l'analyse (`api/estimation.js`, base DVF) et son résultat est conservé
+ * dans l'état (`price`) pour être réutilisé plus tard — l'écran qui l'affiche
+ * n'est simplement plus branché pour l'instant.
  */
 export default function App() {
   const [step, setStep] = useState('adresse')
   const [address, setAddress] = useState(null)
   // Sélection confirmée sur la carte : bâtiment, coordonnées, emprise, type
   // détecté, parcelle et fiche BDNB. Charge utile du calcul, conservée ici pour
-  // n'avoir pas à être redemandée.
+  // n'avoir pas à être redemandée, et pour préremplir le formalulaire suivant.
   const [selection, setSelection] = useState(null)
+  // Montant renvoyé par le moteur : calculé pendant l'analyse, gardé pour un
+  // usage ultérieur même si aucun écran ne l'affiche encore.
   const [price, setPrice] = useState(null)
+  // Caractéristiques détaillées saisies à l'étape `caracteristiques`.
+  const [characteristics, setCharacteristics] = useState(null)
   // Calcul en cours, conservé comme promesse : démarre avec l'animation
   // d'analyse et n'est lu qu'à la fin de celle-ci.
   const pendingEstimate = useRef(null)
-  const reduce = useReducedMotion()
 
   // Avancement à l'intérieur de l'étape courante (0 à 1) — les sous-écrans qui
   // en ont un le remontent via `onProgress`.
@@ -68,22 +74,30 @@ export default function App() {
     [goToStep],
   )
 
-  // Fin de l'animation : le montant est très largement calculé à ce stade.
-  // `requestEstimation` ne rejette jamais.
-  const showResult = useCallback(async () => {
+  // Fin de l'animation d'analyse : on récupère le montant (il ne sera pas
+  // affiché pour l'instant, seulement mémorisé) et on passe au formulaire de
+  // caractéristiques. `requestEstimation` ne rejette jamais.
+  const proceedToCharacteristics = useCallback(async () => {
     setPrice(await pendingEstimate.current)
-    goToStep('resultat')
+    goToStep('caracteristiques')
   }, [goToStep])
 
-  // La conversation vient de se conclure : `EstimationResultStep` bascule en
-  // interne vers son écran de confirmation, sans quitter cette étape.
-  const finishChat = useCallback(() => setStageProgress(1), [])
+  // Formulaire validé : on stocke les valeurs et on affiche l'écran « à suivre »
+  // — rien n'est encore branché sur le calcul de prix ni sur un export.
+  const saveCharacteristics = useCallback(
+    (values) => {
+      setCharacteristics(values)
+      goToStep('suite')
+    },
+    [goToStep],
+  )
 
-  // Fin du parcours — on repart de l'étape adresse pour une nouvelle estimation.
+  // Repart de l'étape adresse pour une nouvelle estimation.
   const restart = useCallback(() => {
     setAddress(null)
     setSelection(null)
     setPrice(null)
+    setCharacteristics(null)
     pendingEstimate.current = null
     goToStep('adresse')
   }, [goToStep])
@@ -96,19 +110,17 @@ export default function App() {
   }, [step])
 
   const stageIndex = STAGES.indexOf(step)
-  const globalPct = Math.round(((stageIndex + stageProgress) / STAGES.length) * 100)
+  const globalPct =
+    step === 'suite'
+      ? 100
+      : Math.round(((stageIndex + stageProgress) / STAGES.length) * 100)
 
-  const variants = {
-    enter: { opacity: 0, x: reduce ? 0 : 24 },
-    center: { opacity: 1, x: 0 },
-    exit: { opacity: 0, x: reduce ? 0 : -24 },
-  }
 
   return (
     <>
-      {/* Barre de progression globale — persistante du premier écran à la
-          confirmation finale, logée en haut de la fenêtre. Reste au-dessus des
-          fenêtres modales du parcours (z-[60]) : z-[70]. */}
+      {/* Barre de progression globale — persistante du premier écran au dernier,
+          logée en haut de la fenêtre. Reste au-dessus des fenêtres modales du
+          parcours (z-[60]) : z-[70]. */}
       <div
         role="progressbar"
         aria-valuemin={0}
@@ -123,17 +135,20 @@ export default function App() {
         />
       </div>
 
-      <section className="flex min-h-screen items-center justify-center bg-stone px-5 py-20 sm:px-8 sm:py-24">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={step}
-            variants={variants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration: reduce ? 0.2 : 0.4, ease: EASE }}
-            className="flex w-full justify-center"
-          >
+      {/* Colonne flex + `my-auto` sur l'enfant : les marges automatiques sur
+          l'axe principal (vertical) centrent le contenu quand il tient dans la
+          fenêtre et retombent à zéro quand il déborde — le haut reste alors
+          défilable (le formulaire de caractéristiques dépasse la hauteur
+          d'écran). `items-center` seul, ou des marges auto sur l'axe
+          transversal, rendraient le haut inatteignable. */}
+      <section className="flex min-h-screen flex-col items-center bg-stone px-5 py-20 sm:px-8 sm:py-24">
+        {/* Transition entre étapes sans animation au niveau de la page : chaque
+            écran garde ses propres animations Framer Motion internes, mais un
+            wrapper animé ici se figeait par intermittence (écran d'analyse à
+            animations en boucle + minuteurs, rendu du formulaire lourd). `key`
+            force le remontage propre à chaque changement d'étape. */}
+        <div key={step} className="my-auto flex w-full justify-center">
+          <>
             {step === 'adresse' ? (
               <EstimationAddressStep onConfirm={goToBuilding} />
             ) : null}
@@ -148,22 +163,49 @@ export default function App() {
             ) : null}
 
             {step === 'analyse' ? (
-              <EstimationLoadingStep onDone={showResult} onProgress={setStageProgress} />
+              <EstimationLoadingStep onDone={proceedToCharacteristics} onProgress={setStageProgress} />
             ) : null}
 
-            {step === 'resultat' && address ? (
-              <EstimationResultStep
-                address={address}
-                price={price}
+            {step === 'caracteristiques' ? (
+              <EstimationCharacteristicsStep
+                selection={selection}
                 onBack={() => goToStep('batiment')}
-                onDone={finishChat}
-                onProgress={setStageProgress}
-                onClose={restart}
+                onValidate={saveCharacteristics}
               />
             ) : null}
-          </motion.div>
-        </AnimatePresence>
+
+            {step === 'suite' ? <NextStepPlaceholder onRestart={restart} /> : null}
+          </>
+        </div>
       </section>
     </>
+  )
+}
+
+/**
+ * Écran d'attente provisoire, affiché après la validation du formulaire de
+ * caractéristiques — il n'y a encore rien après (affichage du prix, export…).
+ */
+function NextStepPlaceholder({ onRestart }) {
+  return (
+    <div className="w-full max-w-md text-center">
+      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-bottle text-white">
+        <Check className="h-7 w-7" strokeWidth={2.25} aria-hidden="true" />
+      </span>
+      <h1 className="mt-6 font-display text-[1.8rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">
+        À suivre
+      </h1>
+      <p className="mx-auto mt-4 max-w-sm text-[0.95rem] leading-relaxed text-ink/55">
+        Vos caractéristiques sont enregistrées. La suite du parcours — estimation
+        détaillée, restitution — reste à construire.
+      </p>
+      <button
+        type="button"
+        onClick={onRestart}
+        className="mt-8 inline-flex touch-manipulation items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-micro text-ink/45 underline-offset-4 transition-colors hover:text-ink hover:underline"
+      >
+        Nouvelle estimation
+      </button>
+    </div>
   )
 }
