@@ -1,0 +1,211 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-ink text-stone font-sans antialiased;
+    font-feature-settings: 'kern' 1, 'liga' 1;
+  }
+
+  /* Chiffres tabulaires par défaut sur les données techniques (mono). */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Focus clavier visible partout — exigence transverse. */
+  :focus-visible {
+    outline: 2px solid theme('colors.brass');
+    outline-offset: 3px;
+    border-radius: 1px;
+  }
+
+  ::selection {
+    background: theme('colors.brass');
+    color: theme('colors.ink');
+  }
+
+  /* Titres display : jamais sur de longs blocs. */
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-content px-5 sm:px-8 lg:px-12;
+  }
+
+  /* Étiquette technique (kicker) — mono, espacée, façon légende de plan. */
+  .eyebrow {
+    @apply font-mono text-[0.7rem] uppercase tracking-micro text-brass;
+  }
+
+  .link-underline {
+    @apply relative inline-flex items-center gap-2 transition-colors;
+  }
+
+  /* Curseur de surface de la fenêtre d'estimation.
+     L'apparence d'un `input[type=range]` ne se pilote qu'en pseudo-éléments,
+     hors de portée des utilitaires Tailwind — d'où ces règles écrites à la
+     main. Le composant natif est conservé plutôt que réécrit en JavaScript :
+     lui seul apporte le suivi tactile du système, le clavier et le rôle ARIA
+     sans une ligne de code, et sans le décrochage au doigt d'un glissement
+     reconstitué à la main.
+     `--fill`, posé en style inline par le composant, marque la part parcourue :
+     WebKit ne colore pas son parcours de lui-même. */
+  .surface-slider {
+    @apply h-11 w-full cursor-pointer touch-manipulation bg-transparent align-middle;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .surface-slider::-webkit-slider-runnable-track {
+    @apply h-1.5 rounded-full;
+    background: linear-gradient(
+      90deg,
+      theme('colors.ink') 0%,
+      theme('colors.brass') var(--fill),
+      rgba(16, 20, 28, 0.1) var(--fill)
+    );
+  }
+
+  .surface-slider::-moz-range-track {
+    @apply h-1.5 rounded-full;
+    background: rgba(16, 20, 28, 0.1);
+  }
+
+  .surface-slider::-moz-range-progress {
+    @apply h-1.5 rounded-full;
+    background: linear-gradient(90deg, theme('colors.ink'), theme('colors.brass'));
+  }
+
+  /* La pastille est large de 1,5 rem : en deçà, la cible tactile impose de
+     viser, et l'on rate son geste sur un écran de téléphone. */
+  .surface-slider::-webkit-slider-thumb {
+    @apply h-6 w-6 rounded-full border-2 border-white bg-ink shadow-[0_2px_8px_-1px_rgba(16,20,28,0.5)];
+    -webkit-appearance: none;
+    appearance: none;
+    /* Recentre la pastille sur la piste : (1,5 rem − 0,375 rem) ÷ 2. */
+    margin-top: -0.5625rem;
+  }
+
+  .surface-slider::-moz-range-thumb {
+    @apply h-6 w-6 rounded-full border-2 border-white bg-ink shadow-[0_2px_8px_-1px_rgba(16,20,28,0.5)];
+    box-sizing: border-box;
+  }
+
+  .surface-slider:focus-visible {
+    outline: none;
+  }
+
+  .surface-slider:focus-visible::-webkit-slider-thumb {
+    @apply ring-2 ring-brass ring-offset-2;
+  }
+
+  .surface-slider:focus-visible::-moz-range-thumb {
+    @apply ring-2 ring-brass ring-offset-2;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Voile Ink Navy pour unifier les visuels photographiques. */
+  .veil::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(16, 20, 28, 0.15) 0%,
+      rgba(16, 20, 28, 0.35) 45%,
+      rgba(16, 20, 28, 0.85) 100%
+    );
+    pointer-events: none;
+  }
+}
+
+/* Carte Leaflet — hors de tout `@layer`, à dessein.
+   Tailwind élague les règles d'un layer dont les classes n'apparaissent pas
+   dans les fichiers scannés ; or `.leaflet-*` est posé par la librairie à
+   l'exécution, jamais dans le JSX. En CSS de premier niveau, ces règles sont
+   émises telles quelles.
+   La classe racine est doublée pour la même raison de charge : `leaflet.css`
+   arrive avec le module carte, donc après cette feuille, et l'emporterait à
+   spécificité égale. */
+
+/* Le fond compte plus qu'il n'y paraît : les dalles se joignent sur des
+   positions sous-pixel et laissent filtrer un liseré. Sombre, il se fond dans
+   la photo aérienne ; le gris clair d'origine y dessinait une grille. */
+.leaflet-container.leaflet-container {
+  @apply bg-ink font-sans;
+}
+
+/* Contrôles de zoom ramenés dans la charte, plutôt qu'un bouton « par défaut »
+   au milieu d'une page dessinée. */
+.leaflet-container.leaflet-container .leaflet-control-zoom {
+  @apply overflow-hidden rounded-lg border-none shadow-lg shadow-ink/30;
+}
+
+.leaflet-container.leaflet-container .leaflet-control-zoom a {
+  @apply border-none bg-ink/85 font-sans text-lg text-stone/80 backdrop-blur-sm transition-colors;
+  width: 1.9rem;
+  height: 1.9rem;
+  line-height: 1.9rem;
+}
+
+.leaflet-container.leaflet-container .leaflet-control-zoom a:hover {
+  @apply bg-ink text-brass;
+}
+
+.leaflet-container.leaflet-container .leaflet-control-zoom a.leaflet-disabled {
+  @apply bg-ink/60 text-stone/25;
+}
+
+/* Les emprises bâties sont des `<path>` rendus focusables : l'anneau doré
+   global s'y applique mal, un halo qui épouse le tracé se lit mieux sur une
+   photo aérienne. */
+.leaflet-container.leaflet-container path.leaflet-interactive:focus-visible {
+  outline: none;
+  filter: drop-shadow(0 0 3px theme('colors.brass'));
+}
+
+/* Respect strict de prefers-reduced-motion (filet de sécurité côté CSS ;
+   les animations Framer Motion sont par ailleurs neutralisées via useReducedMotion). */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
