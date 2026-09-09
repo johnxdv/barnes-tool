@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react'
+import { useId, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Minus, Plus, RotateCcw } from 'lucide-react'
 
@@ -68,24 +68,7 @@ function FieldCard({ label, value, filled, onReset, illustration, illustrationHe
             </motion.span>
           </AnimatePresence>
 
-          <AnimatePresence initial={false}>
-            {filled && onReset ? (
-              <motion.button
-                type="button"
-                onClick={onReset}
-                aria-label={`Effacer — ${label}`}
-                title="Effacer"
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.5 }}
-                whileTap={{ scale: 0.82 }}
-                transition={TAP}
-                className="flex h-5 w-5 touch-manipulation items-center justify-center rounded-full text-ink/25 transition-colors hover:bg-ink/5 hover:text-ink/60"
-              >
-                <RotateCcw className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-              </motion.button>
-            ) : null}
-          </AnimatePresence>
+          <ResetButton label={label} onReset={filled ? onReset : null} />
         </span>
       </div>
 
@@ -111,6 +94,44 @@ function FieldCard({ label, value, filled, onReset, illustration, illustrationHe
 }
 
 /**
+ * Bouton d'effacement — le seul geste qui ramène un champ au silence.
+ *
+ * Il n'existe que tant qu'il y a quelque chose à effacer, et arrive en fondu
+ * plutôt qu'en surgissant : posé d'un coup à côté du chiffre qu'on vient de
+ * déclarer, il attirerait l'œil sur lui au lieu de la valeur. La petite taille
+ * sert aux compteurs doubles, où il se glisse contre un sous-libellé.
+ */
+function ResetButton({ label, onReset, small = false }) {
+  return (
+    <AnimatePresence initial={false}>
+      {onReset ? (
+        <motion.button
+          type="button"
+          onClick={onReset}
+          aria-label={`Effacer — ${label}`}
+          title="Effacer"
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.5 }}
+          whileTap={{ scale: 0.82 }}
+          transition={TAP}
+          className={[
+            'flex touch-manipulation items-center justify-center rounded-full text-ink/25 transition-colors hover:bg-ink/5 hover:text-ink/60',
+            small ? 'h-4 w-4' : 'h-5 w-5',
+          ].join(' ')}
+        >
+          <RotateCcw
+            className={small ? 'h-2.5 w-2.5' : 'h-3 w-3'}
+            strokeWidth={2}
+            aria-hidden="true"
+          />
+        </motion.button>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
+/**
  * Curseur d'une grandeur continue.
  *
  * `start` est la position d'attente de la pastille tant que rien n'a été
@@ -127,6 +148,7 @@ export function SliderField({
   min,
   max,
   step = 1,
+  fineStep = 1,
   start,
   format,
   minLabel,
@@ -139,6 +161,22 @@ export function SliderField({
   const display = filled ? value : start
   const fill = filled ? ((value - min) / (max - min)) * 100 : 0
 
+  // Le pas du curseur est volontairement grossier — cinq mètres, vingt-cinq —
+  // pour qu'un glissement traverse l'échelle sans effort ; les deux boutons,
+  // eux, avancent au mètre. Reste que le navigateur recale toujours la valeur
+  // d'un `range` sur son pas : dès qu'un réglage fin la pose entre deux crans,
+  // le pas de l'élément passe donc au pas fin, sans quoi la pastille sauterait
+  // toute seule au cran voisin et le chiffre affiché mentirait.
+  const inputStep = filled && (value - min) % step !== 0 ? fineStep : step
+
+  const nudge = (delta) => {
+    // Depuis le vide, le pas part de la position d'attente de la pastille : le
+    // premier appui déclare ce qui était déjà sous les yeux, décalé d'un mètre
+    // — jamais la borne basse, qu'on n'a pas demandée.
+    const base = filled ? value : start
+    onChange(Math.min(max, Math.max(min, base + delta)))
+  }
+
   return (
     <FieldCard
       label={label}
@@ -148,25 +186,143 @@ export function SliderField({
       illustration={illustration(display)}
       illustrationHeight={illustrationHeight}
     >
-      <input
-        id={id}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={display}
-        data-empty={filled ? 'false' : 'true'}
-        onChange={(event) => onChange(Number(event.target.value))}
-        aria-label={label}
-        aria-valuetext={filled ? format(value) : VIDE}
-        style={{ '--fill': `${fill}%` }}
-        className="spec-slider mt-1"
-      />
+      <div className="mt-1 flex items-center gap-2">
+        <StepButton
+          icon={Minus}
+          size="sm"
+          label={`Diminuer — ${label}`}
+          disabled={filled && value <= min}
+          onClick={() => nudge(-fineStep)}
+        />
 
-      <div className="flex justify-between font-mono text-[0.56rem] uppercase tracking-micro text-ink/30">
+        <input
+          id={id}
+          type="range"
+          min={min}
+          max={max}
+          step={inputStep}
+          value={display}
+          data-empty={filled ? 'false' : 'true'}
+          onChange={(event) => onChange(Number(event.target.value))}
+          aria-label={label}
+          aria-valuetext={filled ? format(value) : VIDE}
+          style={{ '--fill': `${fill}%` }}
+          className="spec-slider min-w-0 flex-1"
+        />
+
+        <StepButton
+          icon={Plus}
+          size="sm"
+          label={`Augmenter — ${label}`}
+          disabled={filled && value >= max}
+          onClick={() => nudge(fineStep)}
+        />
+      </div>
+
+      {/* Retrait égal à un bouton et son écart (2 rem + 0,5 rem) : les bornes
+          restent à l'aplomb des extrémités de la piste, pas de la carte. */}
+      <div className="flex justify-between px-[2.5rem] font-mono text-[0.56rem] uppercase tracking-micro text-ink/30">
         <span>{minLabel}</span>
         <span>{maxLabel}</span>
       </div>
+    </FieldCard>
+  )
+}
+
+/**
+ * Saisie directe d'une grandeur qu'on connaît au chiffre près.
+ *
+ * Une année de construction ne s'approche pas : on la sait ou on l'ignore. Sur
+ * deux siècles, un curseur demanderait de viser le pixel qui vaut 1963, quand
+ * quatre chiffres tapés suffisent. L'illustration reste, elle — c'est elle qui
+ * fait qu'on voit ce qu'on déclare, curseur ou pas.
+ *
+ * La valeur n'est publiée que lorsqu'elle est plausible : « 19 », en cours de
+ * frappe, ne fait pas basculer le dessin dans le premier XIXe siècle. Le reste
+ * attend la sortie du champ, qui ramène alors la saisie dans ses bornes.
+ */
+export function NumberField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  start,
+  placeholder,
+  hint,
+  illustration,
+  illustrationHeight = 'mt-2 h-[4.75rem]',
+}) {
+  const id = useId()
+  const filled = value !== null && value !== undefined
+  // `null` : personne ne tape, l'affichage suit alors la valeur — ce qui suffit
+  // à ce que le bouton d'effacement vide aussi le champ.
+  const [draft, setDraft] = useState(null)
+  const shown = draft ?? (filled ? String(value) : '')
+
+  const handleChange = (event) => {
+    const texte = event.target.value
+    setDraft(texte)
+
+    if (texte === '') {
+      onChange(null)
+      return
+    }
+
+    const nombre = Number(texte)
+    if (Number.isInteger(nombre) && nombre >= min && nombre <= max) onChange(nombre)
+  }
+
+  const handleBlur = () => {
+    const texte = draft
+    setDraft(null)
+    if (texte === null) return
+
+    const nombre = Number(texte)
+    if (texte.trim() === '' || !Number.isFinite(nombre)) {
+      onChange(null)
+      return
+    }
+
+    onChange(Math.min(max, Math.max(min, Math.round(nombre))))
+  }
+
+  return (
+    <FieldCard
+      label={label}
+      value={filled ? String(value) : null}
+      filled={filled}
+      onReset={() => onChange(null)}
+      illustration={illustration(filled ? value : start)}
+      illustrationHeight={illustrationHeight}
+    >
+      <div className="mt-1 flex items-center justify-center">
+        <input
+          id={id}
+          type="number"
+          inputMode="numeric"
+          min={min}
+          max={max}
+          value={shown}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              event.currentTarget.blur()
+            }
+          }}
+          aria-label={label}
+          placeholder={placeholder}
+          className="spec-number w-32 rounded-xl border border-ink/12 bg-stone/40 px-3 py-2 text-center font-display text-[1.35rem] font-semibold tabular-nums text-ink outline-none transition-colors duration-200 ease-plan placeholder:font-mono placeholder:text-[0.62rem] placeholder:uppercase placeholder:tracking-micro placeholder:text-ink/25 hover:border-ink/25 focus:border-[color:var(--accent)] focus:bg-white"
+        />
+      </div>
+
+      {hint ? (
+        <p className="mt-1 text-center font-mono text-[0.56rem] uppercase tracking-micro text-ink/30">
+          {hint}
+        </p>
+      ) : null}
     </FieldCard>
   )
 }
@@ -185,13 +341,44 @@ export function StepperField({
   onChange,
   min = 0,
   max = 12,
+  format,
+  allowCustom = false,
   illustration,
   illustrationHeight = 'mt-2 h-14',
 }) {
+  const filled = value !== null && value !== undefined
+
+  return (
+    <FieldCard
+      label={label}
+      value={filled ? (format ? format(value) : value) : null}
+      filled={filled}
+      onReset={() => onChange(null)}
+      // Le dessin plafonne là où le compteur s'arrête : une valeur libre plus
+      // grande reste écrite en toutes lettres, mais on ne dessinera pas
+      // vingt-deux lits.
+      illustration={illustration(filled ? Math.min(value, max) : 0)}
+      illustrationHeight={illustrationHeight}
+    >
+      <StepperControl label={label} value={value} onChange={onChange} min={min} max={max} />
+
+      {allowCustom ? <CustomValue label={label} min={min} onChange={onChange} /> : null}
+    </FieldCard>
+  )
+}
+
+/**
+ * Les deux boutons et le chiffre entre eux.
+ *
+ * Sorti de `StepperField` parce que les stationnements en logent deux dans une
+ * même carte (`DualStepperField`) : c'est le même compteur, en plus petit.
+ */
+function StepperControl({ label, value, onChange, min = 0, max = 12, size = 'md' }) {
   const reduce = useReducedMotion()
   const filled = value !== null && value !== undefined
   // Sens du dernier pas : le chiffre entre par où il vient.
   const direction = useRef(1)
+  const petit = size === 'sm'
 
   const step = (delta) => {
     direction.current = delta
@@ -206,47 +393,196 @@ export function StepperField({
   const atMax = filled && value >= max
 
   return (
+    <div
+      className={[
+        'flex items-center justify-center',
+        petit ? 'mt-0.5 gap-1.5' : 'mt-1 gap-3',
+      ].join(' ')}
+    >
+      <StepButton
+        icon={Minus}
+        size={size}
+        label={`Diminuer — ${label}`}
+        disabled={atMin}
+        onClick={() => step(-1)}
+      />
+
+      <span
+        className={[
+          'relative flex items-center justify-center overflow-hidden',
+          petit ? 'h-7 w-8' : 'h-9 w-14',
+        ].join(' ')}
+      >
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={filled ? value : 'vide'}
+            initial={{ opacity: 0, y: reduce ? 0 : direction.current * 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: reduce ? 0 : direction.current * -18 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className={[
+              'font-display font-semibold leading-none tabular-nums',
+              petit ? 'text-[1.2rem]' : 'text-[1.6rem]',
+              filled ? 'text-ink' : 'text-ink/20',
+            ].join(' ')}
+          >
+            {filled ? value : '—'}
+          </motion.span>
+        </AnimatePresence>
+      </span>
+
+      <StepButton
+        icon={Plus}
+        size={size}
+        label={`Augmenter — ${label}`}
+        disabled={atMax}
+        onClick={() => step(1)}
+      />
+    </div>
+  )
+}
+
+/**
+ * Saisie libre, en retrait sous un compteur.
+ *
+ * Un appartement de quinze pièces existe, mais il ne justifie pas d'allonger le
+ * compteur de tout le monde. D'où ce mot gris, fermé sur une ligne de 0,55 rem
+ * : il n'ouvre son champ qu'au clic, et le compteur reste la voie normale. La
+ * valeur saisie n'est pas plafonnée — c'est tout l'objet du champ.
+ */
+function CustomValue({ label, min, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  const commit = () => {
+    const nombre = Number(draft)
+    if (draft.trim() !== '' && Number.isFinite(nombre)) {
+      onChange(Math.max(min, Math.round(nombre)))
+    }
+    setDraft('')
+    setOpen(false)
+  }
+
+  // Le passage du mot au champ se joue à l'aller seulement : chacun des deux
+  // arrive en fondu, aucun ne sort en animation. Une sortie animée devrait
+  // s'achever avant que l'autre n'entre (`mode="wait"`), et le champ n'ouvrirait
+  // qu'après elle — or c'est un champ qu'on vient de réclamer d'un clic, et le
+  // curseur doit y être tout de suite.
+  return (
+    <div className="mt-1 flex h-5 items-center justify-center">
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            key="champ"
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: 'auto' }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <input
+              type="number"
+              inputMode="numeric"
+              min={min}
+              autoFocus
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onBlur={commit}
+              onKeyDown={(event) => {
+                // Entrée valide directement — le champ vit dans un formulaire,
+                // et sans cette interception la touche l'enverrait.
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  commit()
+                }
+                if (event.key === 'Escape') {
+                  setDraft('')
+                  setOpen(false)
+                }
+              }}
+              aria-label={`Valeur personnalisée — ${label}`}
+              placeholder="Autre"
+              className="spec-number h-5 w-[4.5rem] rounded-md border border-ink/15 bg-white px-1 text-center font-mono text-[0.62rem] tabular-nums text-ink outline-none transition-colors focus:border-[color:var(--accent)]"
+            />
+          </motion.div>
+        ) : (
+          <motion.button
+            key="lien"
+            type="button"
+            onClick={() => setOpen(true)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2 }}
+            className="font-mono text-[0.55rem] uppercase tracking-micro text-ink/25 underline decoration-dotted underline-offset-2 transition-colors duration-200 hover:text-ink/60"
+          >
+            Autre
+          </motion.button>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+/**
+ * Deux compteurs dans une même carte.
+ *
+ * Extérieurs et intérieurs sont une seule question posée deux fois : séparés en
+ * deux cartes, ils se lisaient comme deux sujets et l'on comptait ses places de
+ * parking à deux endroits. Ici le libellé est commun, les deux moitiés se font
+ * face, et le vis-à-vis du titre porte le compte des deux.
+ *
+ * Chaque moitié garde son propre effacement : « zéro place couverte » et « je
+ * ne sais pas » ne sont pas la même déclaration, et le « − » ne sait dire que
+ * le premier.
+ */
+export function DualStepperField({ label, fields }) {
+  const rempli = (champ) => champ.value !== null && champ.value !== undefined
+  const filled = fields.some(rempli)
+
+  return (
     <FieldCard
       label={label}
-      value={filled ? value : null}
+      value={fields.map((champ) => `${champ.value ?? '—'} ${champ.suffix}`).join(' · ')}
       filled={filled}
-      onReset={() => onChange(null)}
-      illustration={illustration(filled ? value : 0)}
-      illustrationHeight={illustrationHeight}
+      onReset={() => fields.forEach((champ) => champ.onChange(null))}
     >
-      <div className="mt-1 flex items-center justify-center gap-3">
-        <StepButton
-          icon={Minus}
-          label={`Diminuer — ${label}`}
-          disabled={atMin}
-          onClick={() => step(-1)}
-        />
+      <div className="mt-1 grid grid-cols-2 gap-2">
+        {fields.map((champ) => (
+          <div key={champ.label} className="rounded-lg border border-ink/10 bg-stone/30 px-1.5 py-2">
+            {/* L'entretoise de gauche a la largeur du bouton d'effacement :
+                le sous-libellé reste centré, qu'il soit là ou non. */}
+            <div className="flex items-center justify-center gap-1">
+              <span className="w-4 shrink-0" aria-hidden="true" />
+              <span className="font-mono text-[0.55rem] uppercase tracking-micro text-ink/45">
+                {champ.label}
+              </span>
+              <span className="flex w-4 shrink-0 items-center justify-center">
+                <ResetButton
+                  small
+                  label={`${label} ${champ.label}`}
+                  onReset={rempli(champ) ? () => champ.onChange(null) : null}
+                />
+              </span>
+            </div>
 
-        <span className="relative flex h-9 w-14 items-center justify-center overflow-hidden">
-          <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span
-              key={filled ? value : 'vide'}
-              initial={{ opacity: 0, y: reduce ? 0 : direction.current * 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: reduce ? 0 : direction.current * -18 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className={
-                filled
-                  ? 'font-display text-[1.6rem] font-semibold leading-none tabular-nums text-ink'
-                  : 'font-display text-[1.6rem] font-semibold leading-none text-ink/20'
-              }
+            <div
+              style={{ color: 'var(--accent)' }}
+              className={[
+                'mt-1 h-12 transition-opacity duration-300 ease-plan',
+                rempli(champ) ? 'opacity-100' : 'opacity-25',
+              ].join(' ')}
             >
-              {filled ? value : '—'}
-            </motion.span>
-          </AnimatePresence>
-        </span>
+              {champ.illustration(rempli(champ) ? Math.min(champ.value, champ.max) : 0)}
+            </div>
 
-        <StepButton
-          icon={Plus}
-          label={`Augmenter — ${label}`}
-          disabled={atMax}
-          onClick={() => step(1)}
-        />
+            <StepperControl
+              size="sm"
+              label={`${label} ${champ.label}`}
+              value={champ.value}
+              onChange={champ.onChange}
+              max={champ.max}
+            />
+          </div>
+        ))}
       </div>
     </FieldCard>
   )
@@ -256,8 +592,14 @@ export function StepperField({
  * Bouton d'un pas. 2,5 rem de côté : sous cette taille, la cible se rate au
  * pouce. En butée, il est désactivé plutôt que masqué — une commande qui
  * disparaît déplace l'autre, et le chiffre avec.
+ *
+ * La variante de 2 rem est réservée aux endroits où le bouton n'est pas la
+ * commande principale — il flanque un curseur, ou partage une carte avec un
+ * second compteur — et où la pleine taille écraserait le reste.
  */
-function StepButton({ icon: Icon, label, disabled, onClick }) {
+function StepButton({ icon: Icon, label, disabled, onClick, size = 'md' }) {
+  const petit = size === 'sm'
+
   return (
     <motion.button
       type="button"
@@ -267,9 +609,16 @@ function StepButton({ icon: Icon, label, disabled, onClick }) {
       whileTap={disabled ? undefined : { scale: 0.86 }}
       whileHover={disabled ? undefined : { scale: 1.06 }}
       transition={TAP}
-      className="flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-full border border-ink/15 bg-white text-[color:var(--accent)] transition-colors duration-200 ease-plan hover:border-[color:var(--accent)] hover:bg-[color:var(--accent-tint)] disabled:cursor-not-allowed disabled:border-ink/10 disabled:text-ink/20 disabled:hover:bg-white"
+      className={[
+        'flex shrink-0 touch-manipulation items-center justify-center rounded-full border border-ink/15 bg-white text-[color:var(--accent)] transition-colors duration-200 ease-plan hover:border-[color:var(--accent)] hover:bg-[color:var(--accent-tint)] disabled:cursor-not-allowed disabled:border-ink/10 disabled:text-ink/20 disabled:hover:bg-white',
+        petit ? 'h-8 w-8' : 'h-10 w-10',
+      ].join(' ')}
     >
-      <Icon className="h-[1.05rem] w-[1.05rem]" strokeWidth={2.25} aria-hidden="true" />
+      <Icon
+        className={petit ? 'h-3.5 w-3.5' : 'h-[1.05rem] w-[1.05rem]'}
+        strokeWidth={2.25}
+        aria-hidden="true"
+      />
     </motion.button>
   )
 }

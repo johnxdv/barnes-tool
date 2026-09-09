@@ -2,7 +2,9 @@
 //
 // Reçoit le bâtiment repéré sur la carte et renvoie un montant en euros. Tout
 // le calcul vit ici : le front ne connaît ni les sources de données, ni la
-// méthode, ni les paliers d'élargissement — il n'obtient qu'un nombre.
+// méthode, ni les paliers d'élargissement — il n'obtient qu'un nombre, et les
+// quelques caractéristiques que les bases connaissaient déjà du bien (type,
+// classe énergie), afin de ne pas les redemander au formulaire suivant.
 //
 // La Principauté de Monaco court-circuite tout cela : aucune des sources
 // n'y publie quoi que ce soit, et le montant s'y calcule d'une multiplication
@@ -22,7 +24,7 @@ import { describeBien } from './_lib/bien.js'
 import { departementPricePerM2, findComparables } from './_lib/comparables.js'
 import { communeAtPoint, departementFromInsee } from './_lib/geo.js'
 import { estHorsCouvertureDvf, prixReference } from './_lib/reference.js'
-import { detectPropertyType } from '../src/lib/typeBien.js'
+import { detectPropertyType, estTypeFiable } from '../src/lib/typeBien.js'
 import { MONACO_PRICE_PER_M2 } from '../src/lib/monaco.js'
 
 /**
@@ -64,6 +66,33 @@ function surfaceDeclaree(value) {
   const [min, max] = SURFACE_DECLAREE_RANGE
 
   return Number.isFinite(surface) && surface >= min && surface <= max ? surface : null
+}
+
+/**
+ * Ce que le calcul a reconnu du bien, en plus de son prix.
+ *
+ * À la différence de `meta`, ce bloc descend toujours au front : il ne raconte
+ * pas comment le montant a été obtenu — ce qui reste du diagnostic — mais dit
+ * quelles caractéristiques les bases connaissaient déjà, pour que le formulaire
+ * qui suit cesse de les demander.
+ *
+ * `detected` est aussi important que `value` : sans lui, un `null` de champ non
+ * détecté ne se distinguerait pas d'un champ détecté vide, et le formulaire ne
+ * saurait pas s'il doit poser la question.
+ *
+ * La règle est la même pour les deux champs — n'annoncer une détection que
+ * lorsque la donnée est lue, jamais présumée. Un type de confiance moyenne est
+ * assez bon pour le calcul, qui a de toute façon besoin d'un type ; il ne l'est
+ * pas pour une caractéristique que l'agent verra ensuite figurer au rapport
+ * sans jamais l'avoir déclarée.
+ */
+function detectionUtile({ type, confiance, classeEnergie }) {
+  const typeFiable = estTypeFiable({ type, confiance })
+
+  return {
+    typeBien: { value: typeFiable ? type : null, detected: typeFiable },
+    classeEnergie: { value: classeEnergie ?? null, detected: Boolean(classeEnergie) },
+  }
 }
 
 /** Bornes du montant renvoyé — au-delà, le calcul relève de la donnée aberrante. */
@@ -175,6 +204,16 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       price,
+      // Le `type` retenu juste au-dessus est une coercition, pas une lecture :
+      // il ramène à « appartement » tout ce qui n'est pas « maison », faute de
+      // quoi le barème n'aurait rien à multiplier. C'est donc la détection
+      // faite côté carte qui est jugée ici, pas lui. Aucune classe énergie
+      // n'est cherchée à Monaco : la BDNB s'arrête à la frontière.
+      detection: detectionUtile({
+        type: body.type,
+        confiance: body.typeConfiance,
+        classeEnergie: null,
+      }),
       ...(process.env.ESTIMATION_DEBUG ? { meta } : {}),
     })
   }
@@ -192,13 +231,20 @@ export default async function handler(req, res) {
     // Le type est normalement détecté côté carte et transmis tel quel ; on ne
     // le recalcule que s'il manque — détection interrompue par une validation
     // rapide, ou réseau capricieux au moment du clic.
+    //
+    // La confiance voyage avec le type, et pour une seule raison : le
+    // formulaire de caractéristiques ne reprend le type détecté qu'à condition
+    // qu'il ait été lu dans une base, pas déduit. Sans elle, la réponse ne
+    // saurait pas distinguer les deux.
     let type = body.type
+    let confiance = typeof body.typeConfiance === 'string' ? body.typeConfiance : null
     if (!type) {
       const detected = await detectPropertyType(
         { kind: body.kind ?? 'batiment', lat, lon, areaM2: body.areaM2, properties: body.properties },
         { signal },
       ).catch(() => null)
       type = detected?.type ?? 'autre'
+      confiance = detected?.confiance ?? 'nulle'
     }
 
     // Ce que le front a déjà appris en repérant le bâtiment. Rien n'est pris
@@ -238,6 +284,7 @@ export default async function handler(req, res) {
         surfaceM2: null,
         surfaceSource: 'aucune',
         anneeConstruction: null,
+        classeEnergie: null,
         codeInsee: null,
       })),
       resolvePricePerM2({ lat, lon, type, departement, codeInsee }, { signal }),
@@ -261,6 +308,8 @@ export default async function handler(req, res) {
       // qui dira si la reconstitution géométrique vise juste.
       surfaceEstimee: bien.surfaceM2,
       anneeConstruction: bien.anneeConstruction,
+      classeEnergie: bien.classeEnergie,
+      typeConfiance: confiance,
       codeInsee,
       departement,
       pricePerM2: Math.round(prix.pricePerM2),
@@ -279,6 +328,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       price,
+      detection: detectionUtile({ type, confiance, classeEnergie: bien.classeEnergie }),
       ...(process.env.ESTIMATION_DEBUG ? { meta } : {}),
     })
   } catch (error) {

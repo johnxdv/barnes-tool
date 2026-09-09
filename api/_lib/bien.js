@@ -1,5 +1,6 @@
 // Étape A — caractéristiques du bien sélectionné : surface retenue pour le
-// calcul, et année de construction quand les bases la connaissent.
+// calcul, année de construction et classe énergie quand les bases les
+// connaissent.
 //
 // La chaîne est celle déjà utilisée par la carte (cadastre → BDNB) : les
 // clients correspondants vivent dans `src/lib` et sont purement isomorphes,
@@ -12,10 +13,36 @@ const DPE_ENDPOINT = 'https://api.bdnb.io/v1/bdnb/donnees/batiment_groupe_dpe_re
 
 const DPE_FIELDS = [
   'batiment_groupe_id',
+  // Classe énergie de l'étiquette — `classe_bilan_dpe` porte le DPE au sens
+  // où l'entend le public (le bilan à cinq usages, arrêté 2021), et non
+  // `classe_conso_energie_arrete_2012`, l'ancienne échelle que la base garde à
+  // côté et qui n'est renseignée que sur les diagnostics d'avant la réforme.
+  'classe_bilan_dpe',
   'surface_habitable_logement',
   'surface_habitable_immeuble',
   'nombre_niveau_logement',
 ]
+
+/**
+ * Classes de l'étiquette énergie. Sert de filtre autant que de liste : la BDNB
+ * publie aussi des valeurs hors échelle (`N`, chaîne vide) sur les fiches
+ * incomplètes, et une classe inventée descendrait telle quelle au formulaire.
+ */
+const CLASSES_DPE = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+
+/**
+ * Classe énergie exploitable, ou `null`. Le formulaire de caractéristiques
+ * distingue les deux : une classe connue lui évite de poser la question, une
+ * absence la lui fait poser — mais rien ne doit lui faire afficher une classe
+ * que le bâtiment n'a pas.
+ */
+function classeEnergie(dpe) {
+  const classe = String(dpe?.classe_bilan_dpe ?? '')
+    .trim()
+    .toUpperCase()
+
+  return CLASSES_DPE.includes(classe) ? classe : null
+}
 
 /** Au-delà, mieux vaut la surface géométrique tout de suite que la bonne réponse trop tard. */
 const FETCH_TIMEOUT_MS = 4000
@@ -319,6 +346,17 @@ export async function describeBien(selection, { signal } = {}) {
     // Récupérée comme le demande l'étape A, mais volontairement sans effet sur
     // le prix : le calcul retenu est la seule médiane au m², sans correctif.
     anneeConstruction: readNumber(fiche?.annee_construction),
+    // Même remarque : la classe énergie ne pèse pas sur le montant. Elle est
+    // récupérée pour le formulaire de caractéristiques, qui cesse de la
+    // demander quand le bâtiment a déjà un diagnostic — et la fiche DPE est de
+    // toute façon interrogée pour la surface, la classe ne coûte donc rien de
+    // plus qu'un champ dans le `select`.
+    //
+    // Sauf sur un terrain : le type ne vaut « terrain » que si aucun contour
+    // bâti n'a été retenu, et la fiche DPE trouvée est alors celle du bâtiment
+    // que porte la parcelle — pas celle du bien estimé. La rapporter ferait
+    // entrer au formulaire l'étiquette énergie de la maison d'à côté.
+    classeEnergie: type === 'terrain' ? null : classeEnergie(dpe),
     codeInsee: parcelle?.codeInsee ?? null,
   }
 }

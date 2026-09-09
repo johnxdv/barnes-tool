@@ -741,8 +741,14 @@ export function SalleEauIllustration({ count = 0 }) {
 const ETAGE_H = 11
 const IMMEUBLE_W = 54
 
-/** Un niveau : bandeau plein, trois ouvertures — porte au rez-de-chaussée. */
-function Etage({ index, y }) {
+/**
+ * Un niveau : bandeau plein, trois ouvertures — porte au rez-de-chaussée.
+ *
+ * `fillOpacity` n'est forcée que par `EtageIllustration`, qui éteint la pile
+ * entière pour n'en rallumer qu'un niveau ; ailleurs, le dégradé par rang
+ * suffit à donner du relief à l'immeuble.
+ */
+function Etage({ index, y, fillOpacity }) {
   return (
     <>
       <rect
@@ -751,7 +757,7 @@ function Etage({ index, y }) {
         width={IMMEUBLE_W}
         height={ETAGE_H}
         fill="currentColor"
-        fillOpacity={0.92 - Math.min(index, 6) * 0.07}
+        fillOpacity={fillOpacity ?? 0.92 - Math.min(index, 6) * 0.07}
       />
       {index === 0 ? (
         <>
@@ -828,6 +834,63 @@ export function NiveauxIllustration({ count = 0 }) {
           rx="1.5"
           fill="#B08D57"
         />
+      </motion.g>
+    </Scene>
+  )
+}
+
+/* ------------------------------------------------------------------ étage */
+
+/**
+ * Étage d'un appartement — l'immeuble reste, c'est le niveau qui s'allume.
+ *
+ * Le champ ne compte rien : il désigne. La pile ne grandit donc pas à chaque
+ * pas comme celle des niveaux, elle s'éteint tout entière et un seul bandeau
+ * garde la couleur, qui glisse d'un cran à l'autre — on lit sa hauteur dans
+ * l'immeuble, ce qu'un chiffre seul ne dit pas. L'immeuble ne pousse que
+ * lorsqu'il le faut, deux étages au-dessus du niveau retenu, pour qu'un
+ * troisième étage n'ait jamais l'air d'être le dernier.
+ */
+export function EtageIllustration({ value = 0 }) {
+  const etage = Math.min(Math.max(value, 0), 12)
+  const niveaux = Math.max(etage + 3, 5)
+  const hauteur = niveaux * ETAGE_H + 5
+  const scale = hauteur > 62 ? 62 / hauteur : 1
+
+  return (
+    <Scene>
+      <motion.g style={{ transformOrigin: '120px 0px' }} animate={{ scale }} transition={SPRING}>
+        {Array.from({ length: niveaux }, (_, index) => (
+          <Etage key={index} index={index} y={-(index + 1) * ETAGE_H} fillOpacity={0.17} />
+        ))}
+
+        <AnimatedRect
+          x={120 - IMMEUBLE_W / 2 - 4}
+          y={-niveaux * ETAGE_H - 5}
+          width={IMMEUBLE_W + 8}
+          height="5"
+          rx="1.5"
+          fill="#B08D57"
+          fillOpacity="0.4"
+        />
+
+        {/* Le niveau retenu, dessiné une fois au rez puis translaté : sa porte
+            n'apparaît donc qu'au rez-de-chaussée, où elle a un sens. */}
+        <motion.g
+          initial={false}
+          animate={{ y: -etage * ETAGE_H }}
+          transition={SPRING}
+        >
+          <Etage index={etage} y={-ETAGE_H} fillOpacity={0.95} />
+          <rect
+            x={120 - IMMEUBLE_W / 2 - 13}
+            y={-ETAGE_H + 3.5}
+            width="9"
+            height="4"
+            rx="2"
+            fill="#B08D57"
+          />
+        </motion.g>
       </motion.g>
     </Scene>
   )

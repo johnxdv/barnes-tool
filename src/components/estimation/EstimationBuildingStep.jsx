@@ -35,8 +35,8 @@ const ATTENTE_CADASTRE_MS = 2500
  * moteur la parcelle et la fiche déjà obtenues.
  *
  * Rien de tout cela ne transparaît à l'écran : `onEstimate` remonte la
- * sélection enrichie du type, de la parcelle et de la fiche, sans que
- * l'utilisateur ait eu à s'en préoccuper.
+ * sélection enrichie du type, de sa confiance, de la parcelle et de la fiche,
+ * sans que l'utilisateur ait eu à s'en préoccuper.
  */
 export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress }) {
   const [selection, setSelection] = useState(null)
@@ -92,6 +92,12 @@ export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress
       ...selection,
       surfaceM2: null,
       type: detection?.type ?? null,
+      // La confiance accompagne le type jusqu'au moteur, qui la renvoie ensuite
+      // au formulaire de caractéristiques : elle seule y décide si le type est
+      // repris tel quel ou redemandé. Un type détecté au jugé sert au calcul
+      // sans avoir à être montré ; un type lu dans une base peut, lui, tenir
+      // lieu de réponse.
+      typeConfiance: detection?.confiance ?? null,
       parcelle: detection?.parcelle ?? null,
       fiche: detection?.fiche ?? null,
     })

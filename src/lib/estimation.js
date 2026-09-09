@@ -1,9 +1,24 @@
 // Appel du moteur d'estimation. Le calcul lui-même vit côté serveur
 // (`api/estimation.js`) : le front n'envoie que ce qu'il a appris en repérant
-// le bâtiment sur la carte, et ne reçoit qu'un montant. Ni les sources de
+// le bâtiment sur la carte, et ne reçoit qu'un montant assorti des quelques
+// caractéristiques que les bases connaissaient déjà. Ni les sources de
 // données, ni la méthode, ni les éventuels replis ne descendent jusqu'ici.
 
 const ENDPOINT = '/api/estimation'
+
+/**
+ * Caractéristiques détectées, quand il n'y en a aucune.
+ *
+ * La forme est la même détectée ou non — `value` et `detected` — et elle est
+ * toujours présente : le formulaire de caractéristiques n'a ainsi jamais à se
+ * demander si l'objet existe, seulement si le champ a été trouvé. Un moteur
+ * injoignable ne se distingue alors d'un bâtiment inconnu des bases que dans
+ * la console, ce qui est exactement le degré de différence qui l'intéresse.
+ */
+export const AUCUNE_DETECTION = {
+  typeBien: { value: null, detected: false },
+  classeEnergie: { value: null, detected: false },
+}
 
 /**
  * Filet de sécurité côté client. Le serveur s'impose déjà un budget plus
@@ -12,15 +27,26 @@ const ENDPOINT = '/api/estimation'
  */
 const TIMEOUT_MS = 15000
 
+/** Réponse rendue quand rien n'a pu être obtenu — même forme que les autres. */
+const echec = () => ({ price: null, detection: AUCUNE_DETECTION })
+
 /**
  * Demande l'estimation d'une sélection confirmée sur la carte.
  *
+ * Renvoie `{ price, detection }` : le montant, et ce que les bases savaient
+ * déjà du bien. Les deux viennent du même aller-retour, celui qui court
+ * derrière l'écran d'analyse — la chaîne cadastre → BDNB qu'il déroule pour
+ * reconstituer la surface passe de toute façon devant la vocation du bâtiment
+ * et son diagnostic énergétique ; les rapporter ne coûte rien de plus.
+ *
  * Ne rejette jamais : le parcours ne doit pas s'interrompre parce qu'une
- * requête a échoué. En cas d'échec complet, la promesse est tenue avec `null`
- * — l'écran résultat sait déjà l'afficher sans se casser.
+ * requête a échoué. En cas d'échec complet, la promesse est tenue avec un
+ * montant `null` et aucune détection — l'écran résultat sait déjà afficher le
+ * premier sans se casser, et le formulaire de caractéristiques se contente
+ * alors de tout demander.
  *
  * Silencieux pour l'utilisateur, mais jamais pour la console : chaque sortie
- * en `null` laisse une trace. Un `null` sans explication a déjà coûté un
+ * sans montant laisse une trace. Un `null` sans explication a déjà coûté un
  * diagnostic complet — l'écran affichait « — € » et rien, nulle part, ne
  * disait que la fonction serverless ne démarrait plus.
  *
@@ -33,7 +59,7 @@ const TIMEOUT_MS = 15000
  * dans le navigateur, que le montant obtenu ici vient remplacer.
  */
 export async function requestEstimation(selection) {
-  if (!selection) return null
+  if (!selection) return echec()
 
   const monaco = selection.monaco === true
 
@@ -42,7 +68,7 @@ export async function requestEstimation(selection) {
   // exception : son calcul ne dépend d'aucun découpage administratif, seulement
   // du type et de la surface déclarés.
   if (!monaco && (!Number.isFinite(selection.lat) || !Number.isFinite(selection.lon))) {
-    return null
+    return echec()
   }
 
   const { properties } = selection
@@ -55,6 +81,11 @@ export async function requestEstimation(selection) {
     monaco,
     kind: selection.kind ?? null,
     type: selection.type ?? null,
+    // Le degré de confiance du type détecté sur la carte. Le moteur n'en a que
+    // faire pour calculer — il lui faut un type, fiable ou non — mais c'est lui
+    // qui décidera si le formulaire de caractéristiques reprend ce type sans
+    // rien demander ou s'il pose la question.
+    typeConfiance: selection.typeConfiance ?? null,
     areaM2: selection.areaM2 ?? null,
     // Surface déclarée par l'utilisateur, quand il y en a une : le serveur la
     // fait passer avant toute surface reconstituée depuis les bases. Nulle au
@@ -92,20 +123,51 @@ export async function requestEstimation(selection) {
 
     if (!response.ok) {
       console.error(`[estimation] ${ENDPOINT} a répondu ${response.status}`)
-      return null
+      return echec()
     }
 
     const data = await response.json().catch(() => null)
     const price = Number(data?.price)
+    const detection = lireDetection(data?.detection)
 
     if (!Number.isFinite(price) || price <= 0) {
       console.error('[estimation] Réponse sans montant exploitable —', data)
-      return null
+      // La détection est tout de même conservée : rien ne lie les deux, et un
+      // montant manquant n'est pas une raison de redemander à l'agent ce que
+      // les bases ont su dire du bien.
+      return { price: null, detection }
     }
 
-    return price
+    return { price, detection }
   } catch (error) {
     console.error('[estimation] Appel au moteur en échec —', error)
-    return null
+    return echec()
+  }
+}
+
+/** Classes de l'étiquette énergie, dans l'ordre de l'échelle réglementaire. */
+const CLASSES_DPE = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+
+const TYPES_FORMULAIRE = ['maison', 'appartement']
+
+/**
+ * Relit le bloc de détection avant de le laisser entrer dans le formulaire.
+ *
+ * Le serveur filtre déjà, et c'est le nôtre — mais ce qu'il renvoie ici ne
+ * finit pas dans un affichage, il finit dans l'état du formulaire, d'où il
+ * partira au rapport sous les mêmes dehors qu'une valeur déclarée par l'agent.
+ * Une valeur hors nomenclature y serait indétectable ; on préfère la perdre.
+ */
+function lireDetection(detection) {
+  const champ = (brut, admises) => {
+    const value = typeof brut?.value === 'string' ? brut.value : null
+    const retenue = brut?.detected === true && admises.includes(value) ? value : null
+
+    return { value: retenue, detected: retenue !== null }
+  }
+
+  return {
+    typeBien: champ(detection?.typeBien, TYPES_FORMULAIRE),
+    classeEnergie: champ(detection?.classeEnergie, CLASSES_DPE),
   }
 }

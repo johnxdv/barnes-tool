@@ -6,7 +6,7 @@ import { EstimationLoadingStep } from './components/estimation/EstimationLoading
 import { EstimationCharacteristicsStep } from './components/estimation/EstimationCharacteristicsStep'
 // EstimationResultStep n'est plus dans l'enchaînement — le fichier est conservé,
 // il sera rebranché quand l'affichage du prix reviendra après « caractéristiques ».
-import { requestEstimation } from './lib/estimation'
+import { AUCUNE_DETECTION, requestEstimation } from './lib/estimation'
 
 /**
  * Étapes majeures du parcours, dans l'ordre — base de la barre de progression
@@ -28,6 +28,11 @@ const STAGES = ['adresse', 'batiment', 'analyse', 'caracteristiques']
  * de l'analyse (`api/estimation.js`, base DVF) et son résultat est conservé
  * dans l'état (`price`) pour être réutilisé plus tard — l'écran qui l'affiche
  * n'est simplement plus branché pour l'instant.
+ *
+ * Le même appel rapporte au passage ce que les bases savaient déjà du bien
+ * (`detection`) : la chaîne cadastre → BDNB qu'il déroule pour reconstituer la
+ * surface croise de toute façon la vocation du bâtiment et son diagnostic
+ * énergétique. Cet état-là, contrairement au prix, sert dès l'étape suivante.
  */
 export default function App() {
   const [step, setStep] = useState('adresse')
@@ -39,6 +44,12 @@ export default function App() {
   // Montant renvoyé par le moteur : calculé pendant l'analyse, gardé pour un
   // usage ultérieur même si aucun écran ne l'affiche encore.
   const [price, setPrice] = useState(null)
+  // Caractéristiques que les bases connaissaient déjà du bien — type et classe
+  // énergie — rapportées par le même appel que le montant. Elles arrivent donc
+  // avant que le formulaire de caractéristiques s'affiche, ce qui est la seule
+  // condition qui compte : c'est lui qui s'en sert, pour ne pas redemander ce
+  // qui est déjà su.
+  const [detection, setDetection] = useState(AUCUNE_DETECTION)
   // Caractéristiques détaillées saisies à l'étape `caracteristiques`. Les
   // champs laissés de côté y valent `null` — à distinguer d'un zéro déclaré au
   // moment de les restituer.
@@ -70,6 +81,7 @@ export default function App() {
     (confirmedSelection) => {
       setSelection(confirmedSelection)
       setPrice(null)
+      setDetection(AUCUNE_DETECTION)
       pendingEstimate.current = requestEstimation(confirmedSelection)
       goToStep('analyse')
     },
@@ -77,10 +89,18 @@ export default function App() {
   )
 
   // Fin de l'animation d'analyse : on récupère le montant (il ne sera pas
-  // affiché pour l'instant, seulement mémorisé) et on passe au formulaire de
-  // caractéristiques. `requestEstimation` ne rejette jamais.
+  // affiché pour l'instant, seulement mémorisé) et ce que les bases ont su dire
+  // du bien, puis on passe au formulaire de caractéristiques.
+  // `requestEstimation` ne rejette jamais.
+  //
+  // Les deux `set` précèdent le changement d'étape dans le même traitement,
+  // donc dans le même rendu : le formulaire naît avec la détection déjà en
+  // main, et non pas vide puis rempli après coup — ce qui lui ferait afficher
+  // un champ pour le retirer sous les yeux de l'agent.
   const proceedToCharacteristics = useCallback(async () => {
-    setPrice(await pendingEstimate.current)
+    const estimate = await pendingEstimate.current
+    setPrice(estimate?.price ?? null)
+    setDetection(estimate?.detection ?? AUCUNE_DETECTION)
     goToStep('caracteristiques')
   }, [goToStep])
 
@@ -99,6 +119,7 @@ export default function App() {
     setAddress(null)
     setSelection(null)
     setPrice(null)
+    setDetection(AUCUNE_DETECTION)
     setCharacteristics(null)
     pendingEstimate.current = null
     goToStep('adresse')
@@ -170,6 +191,7 @@ export default function App() {
 
             {step === 'caracteristiques' ? (
               <EstimationCharacteristicsStep
+                detection={detection}
                 onBack={() => goToStep('batiment')}
                 onValidate={saveCharacteristics}
               />

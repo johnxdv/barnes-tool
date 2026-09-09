@@ -178,6 +178,25 @@
   .spec-slider:focus-visible::-moz-range-thumb {
     @apply ring-2 ring-brass ring-offset-2;
   }
+
+  /* Champs numériques du formulaire (année de construction, valeurs libres des
+     compteurs). Les flèches natives sont retirées : elles n'existent qu'au
+     survol, d'un seul côté du champ, et dans un dessin qui n'est celui d'aucun
+     autre contrôle de l'écran — les pas se prennent aux boutons ronds. */
+  .spec-number::-webkit-outer-spin-button,
+  .spec-number::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .spec-number {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  .spec-number:focus-visible {
+    outline: none;
+  }
 }
 
 @layer utilities {
