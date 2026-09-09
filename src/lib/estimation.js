@@ -28,7 +28,7 @@ const TIMEOUT_MS = 15000
  * l'analyse : le redemander à l'affichage du résultat le ferait varier d'un
  * rendu à l'autre.
  *
- * À ne pas confondre avec l'aperçu de la fenêtre de surface
+ * À ne pas confondre avec l'aperçu au prix moyen du secteur
  * (`src/lib/prixSecteur.js`) : celui-ci n'est qu'un ordre de grandeur calculé
  * dans le navigateur, que le montant obtenu ici vient remplacer.
  */
@@ -56,16 +56,15 @@ export async function requestEstimation(selection) {
     kind: selection.kind ?? null,
     type: selection.type ?? null,
     areaM2: selection.areaM2 ?? null,
-    // Surface déclarée au curseur de la fenêtre de surface — la seule donnée
-    // que l'utilisateur ait saisie de tout le parcours. Le serveur la fait
-    // passer avant toute surface reconstituée depuis les bases. Nulle pour un
-    // terrain, qui ne passe pas par cette fenêtre : sa contenance cadastrale
-    // voyage dans `parcelle`.
+    // Surface déclarée par l'utilisateur, quand il y en a une : le serveur la
+    // fait passer avant toute surface reconstituée depuis les bases. Nulle au
+    // lancement de l'analyse — plus rien n'est demandé avant elle, la surface
+    // ne se règle qu'ensuite, au formulaire de caractéristiques.
     surfaceM2: selection.surfaceM2 ?? null,
     // Parcelle cadastrale et fiche BDNB ont déjà été obtenues pour déterminer
-    // le type du bien, pendant que la fenêtre de confirmation était à l'écran.
-    // Les retransmettre évite au serveur de refaire la même chaîne d'appels —
-    // deux à trois secondes qui comptent dans le budget de l'analyse.
+    // le type du bien, au moment du clic sur la carte. Les retransmettre évite
+    // au serveur de refaire la même chaîne d'appels — deux à trois secondes qui
+    // comptent dans le budget de l'analyse.
     parcelle: selection.parcelle ?? null,
     fiche: selection.fiche ?? null,
     // Seuls les attributs BD TOPO® dont le calcul se sert : inutile de faire

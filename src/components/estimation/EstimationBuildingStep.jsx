@@ -1,5 +1,4 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
-import { AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Loader2, MapPin } from 'lucide-react'
 // Leaflet et la carte ne servent qu'ici : les charger à la demande évite
 // d'alourdir de ~150 ko toutes les autres pages du site. Le module est
@@ -8,11 +7,10 @@ import { ArrowLeft, Loader2, MapPin } from 'lucide-react'
 const BuildingMap = lazy(() =>
   import('./BuildingMap').then((module) => ({ default: module.BuildingMap })),
 )
-import { BuildingConfirmModal } from './BuildingConfirmModal'
 import { detectPropertyType } from '../../lib/typeBien'
 
 /**
- * Délai au-delà duquel un repérage libre part sans attendre le cadastre.
+ * Délai au-delà duquel un repérage part sans attendre le cadastre.
  *
  * La contenance de la parcelle est une commodité, pas une condition : le
  * moteur d'estimation sait retrouver la parcelle lui-même, et rien ne justifie
@@ -25,18 +23,20 @@ const ATTENTE_CADASTRE_MS = 2500
 /**
  * Étape 3 — repérage du bien sur la photo aérienne.
  *
- * Sélectionner un bâtiment ouvre la fenêtre de saisie de la surface et lance en
- * même temps, en arrière-plan, la détection de son type (cadastre puis BDNB) :
- * l'attente réseau se joue derrière l'animation plutôt qu'après elle.
+ * Le clic sur la carte est le dernier geste de l'étape : bâtiment ou repérage
+ * libre, l'écran d'analyse s'enchaîne directement, sans fenêtre intermédiaire.
+ * Plus rien n'est demandé ici — surtout pas la surface habitable, qui se règle
+ * désormais au formulaire de caractéristiques, après l'analyse
+ * (`EstimationCharacteristicsStep`).
  *
- * Un repérage libre — un clic hors de toute emprise bâtie — ne l'ouvre pas :
- * c'est un terrain, il n'a pas de surface habitable à déclarer et sa contenance
- * cadastrale est déjà connue. L'écran d'analyse s'enchaîne alors directement,
- * dès que le cadastre a répondu.
+ * La détection du type (cadastre puis BDNB) part au même instant et se joue
+ * derrière l'animation d'analyse plutôt qu'après elle ; on attend seulement sa
+ * réponse — ou `ATTENTE_CADASTRE_MS` — avant de basculer, pour transmettre au
+ * moteur la parcelle et la fiche déjà obtenues.
  *
- * Ce type n'est plus affiché — il ne servira qu'au calcul de l'estimation.
- * `onEstimate` remonte donc la sélection enrichie du type retenu et de la
- * surface retenue, sans que l'utilisateur ait eu à s'en préoccuper.
+ * Rien de tout cela ne transparaît à l'écran : `onEstimate` remonte la
+ * sélection enrichie du type, de la parcelle et de la fiche, sans que
+ * l'utilisateur ait eu à s'en préoccuper.
  */
 export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress }) {
   const [selection, setSelection] = useState(null)
@@ -45,28 +45,21 @@ export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress
   // d'estimation de refaire la même chaîne d'appels quelques secondes plus tard.
   const [detection, setDetection] = useState(null)
 
-  // Un bâtiment se voit demander sa surface habitable ; un repérage libre vaut
-  // terrain — c'est déjà la règle que suit `detectPropertyType`, on ne fait ici
-  // que la lire sans attendre sa réponse, pour savoir s'il faut ouvrir la
-  // fenêtre ou passer outre.
-  const isBuilding = selection?.kind === 'batiment'
-
   // Changer d'adresse (retour puis nouvelle saisie) doit repartir d'une carte vierge.
   useEffect(() => {
     setSelection(null)
   }, [address.id, address.lat, address.lon])
 
   // Avancement local remonté à la barre globale : la moitié dès qu'un bien est
-  // sélectionné (fenêtre de surface ouverte, ou terrain en route vers
-  // l'analyse), le reste n'arrive qu'au passage à l'étape suivante.
+  // sélectionné et en route vers l'analyse, le reste n'arrive qu'au passage à
+  // l'étape suivante.
   useEffect(() => {
     onProgress?.(selection ? 0.5 : 0)
   }, [selection, onProgress])
 
   // Détection du type : relancée à chaque nouvelle sélection, annulée si
   // l'utilisateur en choisit une autre avant la réponse. Rien n'en transparaît
-  // à l'écran — ni attente, ni résultat : la fenêtre s'ouvre immédiatement et
-  // reste utilisable, quoi qu'il advienne du réseau.
+  // à l'écran — ni attente, ni résultat.
   useEffect(() => {
     // Remise à zéro à chaque changement de sélection : sans elle, la détection
     // du bâtiment précédent resterait valide le temps que la nouvelle
@@ -87,42 +80,38 @@ export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress
     return () => controller.abort()
   }, [selection])
 
-  // La détection peut n'avoir pas abouti si l'utilisateur valide très vite —
-  // invraisemblable en pratique (moins d'une seconde, contre le temps de lire
-  // la fenêtre), mais l'écran suivant ne doit rien prendre pour acquis : le
-  // moteur d'estimation sait retrouver lui-même ce qui lui manque.
+  // La détection peut n'avoir pas abouti quand on bascule : l'écran suivant ne
+  // doit donc rien prendre pour acquis — le moteur d'estimation sait retrouver
+  // lui-même ce qui lui manque.
   //
-  // `surfaceM2` est la seule chose que l'utilisateur ait déclarée de tout le
-  // parcours : elle l'emporte donc, côté moteur, sur toute surface reconstituée.
-  const startEstimate = useCallback(
-    (surfaceM2) => {
-      onEstimate?.({
-        ...selection,
-        surfaceM2,
-        type: detection?.type ?? null,
-        parcelle: detection?.parcelle ?? null,
-        fiche: detection?.fiche ?? null,
-      })
-    },
-    [onEstimate, selection, detection],
-  )
+  // `surfaceM2` part systématiquement à `null` : plus personne ne la déclare à
+  // ce stade. Le moteur la reconstitue de son côté (BDNB, cadastre, emprise),
+  // et le formulaire de caractéristiques la reprendra plus tard, au curseur.
+  const startEstimate = useCallback(() => {
+    onEstimate?.({
+      ...selection,
+      surfaceM2: null,
+      type: detection?.type ?? null,
+      parcelle: detection?.parcelle ?? null,
+      fiche: detection?.fiche ?? null,
+    })
+  }, [onEstimate, selection, detection])
 
-  // Terrain : aucune fenêtre, aucune question. Rien n'est déclaré — c'est la
-  // contenance de la parcelle qui fait la surface, et elle voyage déjà dans
-  // `parcelle`, que le moteur lit de lui-même. On attend seulement que le
-  // cadastre ait répondu pour la lui transmettre, ce qui lui épargne d'aller
-  // la chercher ; passé le délai, on part sans, et il s'en charge.
+  // Aucune fenêtre, aucune question : le clic sur la carte suffit. On attend
+  // seulement que le cadastre ait répondu pour transmettre parcelle et fiche au
+  // moteur, ce qui lui épargne d'aller les chercher ; passé le délai, on part
+  // sans, et il s'en charge.
   useEffect(() => {
-    if (!selection || isBuilding) return undefined
+    if (!selection) return undefined
 
     if (detection) {
-      startEstimate(null)
+      startEstimate()
       return undefined
     }
 
-    const timer = setTimeout(() => startEstimate(null), ATTENTE_CADASTRE_MS)
+    const timer = setTimeout(startEstimate, ATTENTE_CADASTRE_MS)
     return () => clearTimeout(timer)
-  }, [selection, isBuilding, detection, startEstimate])
+  }, [selection, detection, startEstimate])
 
   return (
     <div className="w-full max-w-3xl">
@@ -163,21 +152,7 @@ export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress
             onSelect={setSelection}
           />
         </Suspense>
-
       </div>
-
-      {/* La fenêtre est rendue hors du conteneur de la carte : elle couvre la
-          page entière, pas seulement la vue aérienne. */}
-      <AnimatePresence>
-        {isBuilding ? (
-          <BuildingConfirmModal
-            key="surface"
-            selection={selection}
-            onEstimate={startEstimate}
-            onClose={() => setSelection(null)}
-          />
-        ) : null}
-      </AnimatePresence>
     </div>
   )
 }

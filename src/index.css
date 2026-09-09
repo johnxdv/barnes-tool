@@ -66,65 +66,116 @@
     @apply relative inline-flex items-center gap-2 transition-colors;
   }
 
-  /* Curseur de surface de la fenêtre d'estimation.
+  /* Curseur des champs chiffrés du formulaire de caractéristiques.
      L'apparence d'un `input[type=range]` ne se pilote qu'en pseudo-éléments,
      hors de portée des utilitaires Tailwind — d'où ces règles écrites à la
      main. Le composant natif est conservé plutôt que réécrit en JavaScript :
      lui seul apporte le suivi tactile du système, le clavier et le rôle ARIA
      sans une ligne de code, et sans le décrochage au doigt d'un glissement
      reconstitué à la main.
-     `--fill`, posé en style inline par le composant, marque la part parcourue :
-     WebKit ne colore pas son parcours de lui-même. */
-  .surface-slider {
-    @apply h-11 w-full cursor-pointer touch-manipulation bg-transparent align-middle;
+
+     Trois variables, posées en style inline par le champ :
+     — `--fill`, la part parcourue de la piste (WebKit ne colore pas son
+       parcours de lui-même) ;
+     — `--accent`, la couleur de la colonne (marine à gauche, corail à droite),
+       ce qui permet à une seule feuille de servir les deux ;
+     — `--accent-from`, l'amorce du dégradé de piste.
+
+     `[data-empty]` marque le champ non renseigné : piste et pastille passent au
+     gris, la pastille se vide. C'est le seul signal visuel qui distingue « rien
+     n'a été touché » d'une valeur réellement choisie. */
+  .spec-slider {
+    @apply h-9 w-full cursor-pointer touch-manipulation bg-transparent align-middle;
     -webkit-appearance: none;
     appearance: none;
   }
 
-  .surface-slider::-webkit-slider-runnable-track {
+  .spec-slider::-webkit-slider-runnable-track {
     @apply h-1.5 rounded-full;
     background: linear-gradient(
       90deg,
-      theme('colors.ink') 0%,
-      theme('colors.brass') var(--fill),
-      rgba(16, 20, 28, 0.1) var(--fill)
+      var(--accent-from) 0%,
+      var(--accent) var(--fill),
+      rgba(16, 20, 28, 0.09) var(--fill)
     );
   }
 
-  .surface-slider::-moz-range-track {
+  .spec-slider::-moz-range-track {
     @apply h-1.5 rounded-full;
-    background: rgba(16, 20, 28, 0.1);
+    background: rgba(16, 20, 28, 0.09);
   }
 
-  .surface-slider::-moz-range-progress {
+  .spec-slider::-moz-range-progress {
     @apply h-1.5 rounded-full;
-    background: linear-gradient(90deg, theme('colors.ink'), theme('colors.brass'));
+    background: linear-gradient(90deg, var(--accent-from), var(--accent));
   }
 
-  /* La pastille est large de 1,5 rem : en deçà, la cible tactile impose de
-     viser, et l'on rate son geste sur un écran de téléphone. */
-  .surface-slider::-webkit-slider-thumb {
-    @apply h-6 w-6 rounded-full border-2 border-white bg-ink shadow-[0_2px_8px_-1px_rgba(16,20,28,0.5)];
+  /* La pastille est large de 1,375 rem : en deçà, la cible tactile impose de
+     viser, et l'on rate son geste sur un écran de téléphone. Elle grossit au
+     contact — c'est le retour immédiat au doigt, avant même que le chiffre
+     n'ait bougé. */
+  .spec-slider::-webkit-slider-thumb {
+    @apply h-[1.375rem] w-[1.375rem] rounded-full border-2 border-white;
     -webkit-appearance: none;
     appearance: none;
-    /* Recentre la pastille sur la piste : (1,5 rem − 0,375 rem) ÷ 2. */
-    margin-top: -0.5625rem;
+    background: var(--accent);
+    box-shadow: 0 2px 8px -1px rgba(16, 20, 28, 0.45);
+    /* Recentre la pastille sur la piste : (1,375 rem − 0,375 rem) ÷ 2. */
+    margin-top: -0.5rem;
+    transition:
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .surface-slider::-moz-range-thumb {
-    @apply h-6 w-6 rounded-full border-2 border-white bg-ink shadow-[0_2px_8px_-1px_rgba(16,20,28,0.5)];
+  .spec-slider::-moz-range-thumb {
+    @apply h-[1.375rem] w-[1.375rem] rounded-full border-2 border-white;
+    background: var(--accent);
+    box-shadow: 0 2px 8px -1px rgba(16, 20, 28, 0.45);
     box-sizing: border-box;
+    transition:
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .surface-slider:focus-visible {
+  .spec-slider:hover::-webkit-slider-thumb {
+    transform: scale(1.08);
+  }
+
+  .spec-slider:active::-webkit-slider-thumb {
+    transform: scale(1.22);
+  }
+
+  .spec-slider:hover::-moz-range-thumb {
+    transform: scale(1.08);
+  }
+
+  .spec-slider:active::-moz-range-thumb {
+    transform: scale(1.22);
+  }
+
+  /* Champ non renseigné : la pastille est creuse et grise, la piste ne montre
+     aucun parcours — rien ne laisse croire qu'une valeur a été choisie. */
+  .spec-slider[data-empty='true']::-webkit-slider-thumb {
+    background: #ffffff;
+    border-color: rgba(16, 20, 28, 0.3);
+    box-shadow: 0 1px 5px -1px rgba(16, 20, 28, 0.3);
+  }
+
+  .spec-slider[data-empty='true']::-moz-range-thumb {
+    background: #ffffff;
+    border-color: rgba(16, 20, 28, 0.3);
+    box-shadow: 0 1px 5px -1px rgba(16, 20, 28, 0.3);
+  }
+
+  .spec-slider:focus-visible {
     outline: none;
   }
 
-  .surface-slider:focus-visible::-webkit-slider-thumb {
+  .spec-slider:focus-visible::-webkit-slider-thumb {
     @apply ring-2 ring-brass ring-offset-2;
   }
 
-  .surface-slider:focus-visible::-moz-range-thumb {
+  .spec-slider:focus-visible::-moz-range-thumb {
     @apply ring-2 ring-brass ring-offset-2;
   }
 }

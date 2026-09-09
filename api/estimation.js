@@ -46,9 +46,10 @@ const DVF_BUDGET_MS = 7000
 const SURFACE_PAR_DEFAUT = { maison: 100, appartement: 65, terrain: 600 }
 
 /**
- * Bornes de la surface déclarée au curseur, alignées sur celles de la fenêtre
- * qui la recueille (`BuildingConfirmModal`). Le curseur ne peut rien produire
- * en dehors — la vérification vise une requête forgée, pas l'utilisateur.
+ * Bornes de la surface déclarée au curseur, alignées sur celles du formulaire
+ * qui la recueille (`EstimationCharacteristicsStep`). Le curseur ne peut rien
+ * produire en dehors — la vérification vise une requête forgée, pas
+ * l'utilisateur.
  */
 const SURFACE_DECLAREE_RANGE = [10, 800]
 

@@ -34,12 +34,14 @@ export default function App() {
   const [address, setAddress] = useState(null)
   // Sélection confirmée sur la carte : bâtiment, coordonnées, emprise, type
   // détecté, parcelle et fiche BDNB. Charge utile du calcul, conservée ici pour
-  // n'avoir pas à être redemandée, et pour préremplir le formalulaire suivant.
+  // n'avoir pas à être redemandée.
   const [selection, setSelection] = useState(null)
   // Montant renvoyé par le moteur : calculé pendant l'analyse, gardé pour un
   // usage ultérieur même si aucun écran ne l'affiche encore.
   const [price, setPrice] = useState(null)
-  // Caractéristiques détaillées saisies à l'étape `caracteristiques`.
+  // Caractéristiques détaillées saisies à l'étape `caracteristiques`. Les
+  // champs laissés de côté y valent `null` — à distinguer d'un zéro déclaré au
+  // moment de les restituer.
   const [characteristics, setCharacteristics] = useState(null)
   // Calcul en cours, conservé comme promesse : démarre avec l'animation
   // d'analyse et n'est lu qu'à la fin de celle-ci.
@@ -168,7 +170,6 @@ export default function App() {
 
             {step === 'caracteristiques' ? (
               <EstimationCharacteristicsStep
-                selection={selection}
                 onBack={() => goToStep('batiment')}
                 onValidate={saveCharacteristics}
               />

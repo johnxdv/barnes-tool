@@ -9,6 +9,12 @@ export default {
         stone: '#EDEAE3', // Warm Stone — fond clair, sections alternées
         brass: '#B08D57', // Brass — accent unique (CTA, liens, éléments actifs)
         bottle: '#1F3B2E', // Bottle Green — accent secondaire très rare
+        // Couple de l'identité Barnes, repris des rapports d'estimation PDF.
+        // Réservé au formulaire de caractéristiques, où il sépare les deux
+        // colonnes de saisie : le bien d'un côté, le bâti de l'autre. Partout
+        // ailleurs, l'accent reste Brass.
+        marine: '#12294A', // Bleu marine Barnes — colonne « Votre bien »
+        corail: '#D24B3E', // Rouge corail Barnes — colonne « Informations sur le bâti »
       },
       fontFamily: {
         // Deux familles principales + une utilitaire monospace.

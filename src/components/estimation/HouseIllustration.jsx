@@ -8,9 +8,10 @@
  * palier raconte quelque chose.
  *
  * Tous partagent la même `viewBox` et la même ligne de sol : au fondu enchaîné,
- * le terrain ne bouge pas, seul le bâti change. La charte ne laisse que quatre
- * teintes — murs en Ink, toitures en Brass, ouvertures en Warm Stone, végétal
- * en Bottle Green.
+ * le terrain ne bouge pas, seul le bâti change. Quatre teintes seulement —
+ * murs en `currentColor` (l'accent de la colonne qui accueille l'illustration,
+ * marine dans le formulaire de caractéristiques), toitures en Brass,
+ * ouvertures en Warm Stone, végétal en Bottle Green.
  */
 
 const VIEW_BOX = '0 0 260 130'
@@ -20,7 +21,7 @@ function Sol() {
   return (
     <path
       d="M14 112 H246"
-      className="stroke-ink"
+      stroke="currentColor"
       strokeOpacity="0.14"
       strokeWidth="2"
       strokeLinecap="round"
@@ -33,7 +34,7 @@ function MaisonPetite() {
   return (
     <>
       <Sol />
-      <rect x="108" y="78" width="44" height="34" className="fill-ink" />
+      <rect x="108" y="78" width="44" height="34" fill="currentColor" />
       <path d="M101 80 L130 57 L159 80 Z" className="fill-brass" />
       <rect x="124" y="94" width="13" height="18" rx="1" className="fill-stone" />
       <rect x="112" y="85" width="9" height="9" rx="1" className="fill-stone" />
@@ -48,8 +49,8 @@ function MaisonMoyenne() {
     <>
       <Sol />
       {/* La souche est peinte avant la toiture : celle-ci la recouvre à sa base. */}
-      <rect x="149" y="48" width="9" height="20" className="fill-ink" />
-      <rect x="96" y="70" width="68" height="42" className="fill-ink" />
+      <rect x="149" y="48" width="9" height="20" fill="currentColor" />
+      <rect x="96" y="70" width="68" height="42" fill="currentColor" />
       <path d="M89 72 L130 43 L171 72 Z" className="fill-brass" />
       <rect x="122" y="88" width="16" height="24" rx="1" className="fill-stone" />
       <rect x="104" y="78" width="13" height="13" rx="1" className="fill-stone" />
@@ -63,8 +64,8 @@ function MaisonEtage() {
   return (
     <>
       <Sol />
-      <rect x="159" y="34" width="9" height="24" className="fill-ink" />
-      <rect x="86" y="56" width="88" height="56" className="fill-ink" />
+      <rect x="159" y="34" width="9" height="24" fill="currentColor" />
+      <rect x="86" y="56" width="88" height="56" fill="currentColor" />
       <path d="M79 58 L130 29 L181 58 Z" className="fill-brass" />
       {/* Bandeau d'étage : la seule ligne claire qui traverse la façade. */}
       <rect x="86" y="83" width="88" height="2" className="fill-brass" fillOpacity="0.55" />
@@ -86,16 +87,16 @@ function MaisonPiscine() {
       <Sol />
 
       {/* Arbres placés en premier : le bâti passe devant, la profondeur se lit. */}
-      <rect x="170" y="88" width="3" height="14" className="fill-ink" fillOpacity="0.7" />
+      <rect x="170" y="88" width="3" height="14" fill="currentColor" fillOpacity="0.7" />
       <circle cx="171.5" cy="82" r="10" className="fill-bottle" />
-      <rect x="237" y="90" width="3" height="12" className="fill-ink" fillOpacity="0.7" />
+      <rect x="237" y="90" width="3" height="12" fill="currentColor" fillOpacity="0.7" />
       <circle cx="238.5" cy="84" r="8" className="fill-bottle" fillOpacity="0.8" />
 
       {/* Aile basse, puis corps principal — deux volumes, pas un bloc étiré. */}
-      <rect x="134" y="78" width="28" height="34" className="fill-ink" />
+      <rect x="134" y="78" width="28" height="34" fill="currentColor" />
       <path d="M129 80 L148 65 L167 80 Z" className="fill-brass" />
-      <rect x="104" y="24" width="9" height="26" className="fill-ink" />
-      <rect x="46" y="54" width="88" height="58" className="fill-ink" />
+      <rect x="104" y="24" width="9" height="26" fill="currentColor" />
+      <rect x="46" y="54" width="88" height="58" fill="currentColor" />
       <path d="M39 56 L90 27 L141 56 Z" className="fill-brass" />
       <rect x="46" y="81" width="88" height="2" className="fill-brass" fillOpacity="0.55" />
 
@@ -130,31 +131,31 @@ function Chateau() {
       <Sol />
 
       {/* Courtines : elles ancrent la silhouette au sol de part et d'autre. */}
-      <rect x="46" y="80" width="28" height="32" className="fill-ink" />
-      <rect x="186" y="80" width="28" height="32" className="fill-ink" />
+      <rect x="46" y="80" width="28" height="32" fill="currentColor" />
+      <rect x="186" y="80" width="28" height="32" fill="currentColor" />
       {[46, 56, 66, 186, 196, 206].map((x) => (
-        <rect key={x} x={x} y="74" width="8" height="6" className="fill-ink" />
+        <rect key={x} x={x} y="74" width="8" height="6" fill="currentColor" />
       ))}
 
       {/* Corps central, couronné de merlons. */}
-      <rect x="96" y="58" width="68" height="54" className="fill-ink" />
+      <rect x="96" y="58" width="68" height="54" fill="currentColor" />
       {[96, 111, 126, 141, 156].map((x) => (
-        <rect key={x} x={x} y="50" width="8" height="8" className="fill-ink" />
+        <rect key={x} x={x} y="50" width="8" height="8" fill="currentColor" />
       ))}
 
       {/* Tours et leurs toits en poivrière. */}
-      <rect x="70" y="46" width="28" height="66" className="fill-ink" />
-      <rect x="162" y="46" width="28" height="66" className="fill-ink" />
+      <rect x="70" y="46" width="28" height="66" fill="currentColor" />
+      <rect x="162" y="46" width="28" height="66" fill="currentColor" />
       <path d="M65 48 L84 14 L103 48 Z" className="fill-brass" />
       <path d="M157 48 L176 14 L195 48 Z" className="fill-brass" />
 
       {/* Étendard — le seul détail qui dépasse, et qui date le bâtiment. */}
-      <path d="M176 14 V5" className="stroke-ink" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M176 14 V5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M176.5 5 L191 8.5 L176.5 12 Z" className="fill-brass" />
 
       {/* Porte charretière en plein cintre, et meurtrières. */}
       <path d="M119 112 V92 a11 11 0 0 1 22 0 V112 Z" className="fill-stone" />
-      <path d="M130 92 V112" className="stroke-ink" strokeOpacity="0.35" strokeWidth="1.5" />
+      <path d="M130 92 V112" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1.5" />
       {[
         [79, 60],
         [79, 82],

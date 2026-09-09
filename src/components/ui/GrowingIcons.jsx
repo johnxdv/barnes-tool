@@ -3,7 +3,8 @@
  *
  * `icons` : liste de `{ Icon, delay }` — `delay` en secondes, négatif pour
  * démarrer le cycle déjà entamé (même convention que `figure-forming` dans
- * `BuildingConfirmModal`), ce qui donne l'effet de croissance décalée d'une
+ * `figure-forming` dans `tailwind.config.js`), ce qui donne l'effet de
+ * croissance décalée d'une
  * icône à l'autre sans minuterie JS. Tout repose sur `opacity`/`transform` :
  * composite GPU, aucun reflow.
  */
