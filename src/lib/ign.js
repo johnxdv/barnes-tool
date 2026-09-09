@@ -1,13 +1,8 @@
-// Fonds de carte et emprises bâties de la Géoplateforme IGN — service public,
+// Fonds de carte et données bâtiment de la Géoplateforme IGN — service public,
 // licence ouverte Etalab, sans clé ni quota déclaré.
 // https://geoservices.ign.fr/services-geoplateforme-diffusion
-//
-// Périmètre volontairement réduit à l'affichage de la carte : seule la couche
-// bâtiment (pour rendre les contours cliquables) et le fond orthophoto sont
-// conservés. Tout ce qui servait au moteur de calcul — parcelle cadastrale,
-// fiche d'un bâtiment isolé — a été retiré de cette étape.
 
-import { boundingBox } from './geo.js'
+import { boundingBox, pointInRing } from './geo.js'
 
 /**
  * Orthophotographie IGN en WMTS. Le jeu de tuiles « PM » est la pyramide
@@ -35,13 +30,33 @@ export const IGN_ATTRIBUTION = '© IGN — Géoplateforme'
 const WFS_ENDPOINT = 'https://data.geopf.fr/wfs/ows'
 
 /**
- * Couche bâtiment de la BD TOPO®, levée par photogrammétrie sur ces mêmes
- * orthophotos — donc calée dessus, sans décalage visible.
+ * Couche bâtiment de la BD TOPO®. Deux raisons de la préférer au parcellaire
+ * cadastral : elle est levée par photogrammétrie sur ces mêmes orthophotos —
+ * donc calée dessus, sans décalage visible — et elle porte déjà les attributs
+ * (usage, nombre d'étages, hauteur) dont l'étape d'estimation se sert.
  */
 const BUILDING_LAYER = 'BDTOPO_V3:batiment'
 
-/** Seuls attributs demandés : la fiche BD TOPO® complète triplerait le poids. */
-const BUILDING_FIELDS = ['cleabs', 'nature', 'geometrie']
+/**
+ * Seuls attributs demandés : la fiche BD TOPO® complète triplerait le poids.
+ * `usage_1` et `nombre_de_logements` servent de repli à la détection du type
+ * de bien quand la BDNB ne connaît pas le bâtiment.
+ *
+ * `hauteur` est le repli du repli pour compter les niveaux : `nombre_d_etages`
+ * couvre 99 % des bâtiments résidentiels mais seulement 57 % du bâti tous
+ * usages confondus, là où la hauteur en couvre 92 %. Attention à ce qu'elle
+ * mesure — voir `niveauxDepuisHauteur` côté moteur d'estimation.
+ */
+const BUILDING_FIELDS = [
+  'cleabs',
+  'nature',
+  'usage_1',
+  'nombre_de_logements',
+  'nombre_d_etages',
+  'hauteur',
+  'construction_legere',
+  'geometrie',
+]
 
 /** Garde-fou : au-delà, la réponse pèserait plus qu'elle n'aiderait. */
 const MAX_BUILDINGS = 400
@@ -88,8 +103,115 @@ export async function fetchBuildings(lat, lon, { signal } = {}) {
     type: 'FeatureCollection',
     features: (data.features ?? [])
       .filter((feature) => Boolean(feature?.geometry))
-      // `cleabs` est l'identifiant stable d'un bâtiment BD TOPO® ; l'id de la
-      // réponse WFS ne l'est pas d'une édition à l'autre.
+      // `id` d'un bâtiment BD TOPO® : `cleabs` est l'identifiant stable, l'id
+      // de la réponse WFS ne l'est pas d'une édition à l'autre.
       .map((feature) => ({ ...feature, id: feature.properties?.cleabs ?? feature.id })),
+  }
+}
+
+/**
+ * Demi-côté de la fenêtre interrogée pour retrouver un seul bâtiment. Assez
+ * large pour rattraper un point posé au ras d'un mur, assez étroite pour que
+ * la réponse tienne en quelques bâtiments plutôt qu'en quelques centaines.
+ */
+const SINGLE_BUILDING_RADIUS_M = 30
+
+/** Le point tombe-t-il dans le contour extérieur de la géométrie ? */
+function geometryContains(geometry, lon, lat) {
+  const polygons =
+    geometry?.type === 'MultiPolygon'
+      ? geometry.coordinates
+      : geometry?.type === 'Polygon'
+        ? [geometry.coordinates]
+        : []
+
+  return polygons.some((rings) => pointInRing(lon, lat, rings[0]))
+}
+
+/**
+ * Attributs BD TOPO® du bâtiment situé sous un point.
+ *
+ * Sert de repli au moteur d'estimation lorsque le front n'a pas transmis la
+ * fiche du bâtiment cliqué — validation trop rapide, réseau capricieux. Le
+ * point remonté par la carte étant toujours pris à l'intérieur du polygone, le
+ * bâtiment recherché est celui qui contient le point ; à défaut, on ne devine
+ * rien et l'on renvoie `null` plutôt qu'un voisin.
+ *
+ * Ne lève jamais : c'est un repli, et il ne doit pas pouvoir faire échouer un
+ * calcul qui sait déjà se passer de lui.
+ */
+export async function fetchBuildingAt(lat, lon, { signal } = {}) {
+  const { south, west, north, east } = boundingBox(lat, lon, SINGLE_BUILDING_RADIUS_M)
+
+  const params = new URLSearchParams({
+    SERVICE: 'WFS',
+    VERSION: '2.0.0',
+    REQUEST: 'GetFeature',
+    TYPENAMES: BUILDING_LAYER,
+    OUTPUTFORMAT: 'application/json',
+    SRSNAME: 'EPSG:4326',
+    BBOX: `${west},${south},${east},${north},EPSG:4326`,
+    PROPERTYNAME: BUILDING_FIELDS.join(','),
+    COUNT: '20',
+  })
+
+  try {
+    const response = await fetch(`${WFS_ENDPOINT}?${params}`, { signal })
+    if (!response.ok) return null
+
+    const data = await response.json().catch(() => null)
+    if (data?.type !== 'FeatureCollection') return null
+
+    const match = (data.features ?? []).find((feature) =>
+      geometryContains(feature?.geometry, lon, lat),
+    )
+
+    return match?.properties ?? null
+  } catch (error) {
+    if (signal?.aborted) throw error
+    return null
+  }
+}
+
+// --- Parcelles cadastrales -------------------------------------------------
+
+const APICARTO_PARCELLE = 'https://apicarto.ign.fr/api/cadastre/parcelle'
+
+/**
+ * Parcelle cadastrale contenant un point. Sert à deux choses : rattacher le
+ * bâtiment cliqué à un identifiant que la BDNB comprend (`idu`), et distinguer
+ * un terrain nu — une parcelle sans aucune emprise bâtie — d'un simple clic
+ * hors sujet.
+ *
+ * Renvoie `null` si aucune parcelle ne couvre le point (hors cadastre vecteur,
+ * domaine public…) plutôt que de lever : l'absence de parcelle est une réponse,
+ * pas une panne.
+ */
+export async function fetchParcelle(lat, lon, { signal } = {}) {
+  const geom = JSON.stringify({ type: 'Point', coordinates: [lon, lat] })
+  const response = await fetch(`${APICARTO_PARCELLE}?geom=${encodeURIComponent(geom)}`, { signal })
+
+  if (!response.ok) {
+    throw new Error(`API Carto cadastre — réponse ${response.status}`)
+  }
+
+  const data = await response.json().catch(() => null)
+  const properties = data?.features?.[0]?.properties
+
+  if (!properties?.idu) return null
+
+  return {
+    // Identifiant unique de parcelle, au format attendu par `l_parcelle_id`
+    // côté BDNB (ex. « 57176000140471 »).
+    idu: properties.idu,
+    // Les cinq premiers caractères de l'IDU portent le code commune, et c'est
+    // celui-là qu'il faut retenir : à Paris, Lyon et Marseille, `code_insee`
+    // désigne la ville (75056) là où le cadastre et la BDNB raisonnent par
+    // arrondissement (75104). S'aligner sur `code_insee` y ferait échouer tout
+    // rapprochement.
+    codeInsee: properties.idu.slice(0, 5) || properties.code_insee,
+    commune: properties.nom_com,
+    // Contenance cadastrale en m² — utile à l'estimation d'un terrain.
+    contenance: properties.contenance ?? null,
   }
 }

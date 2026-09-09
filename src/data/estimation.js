@@ -1,7 +1,9 @@
 /**
  * Étapes affichées pendant l'analyse. Les durées sont fixes et purement
- * visuelles : aucun calcul ne tourne derrière cet écran. L'animation a son
- * rythme propre — total = 12 s, à parts égales.
+ * visuelles : le calcul réel tourne bien en arrière-plan (voir
+ * `src/lib/estimation.js`) mais répond en quelques secondes, sans rapport avec
+ * ce déroulé. L'animation garde donc son rythme propre — elle n'est ni
+ * raccourcie ni allongée par le moteur. Total = 12 s, à parts égales.
  */
 export const ANALYSIS_STEPS = [
   { id: 'batiment', label: 'Expertise du bien…', done: 'Bien expertisé', durationMs: 4000 },
@@ -11,7 +13,8 @@ export const ANALYSIS_STEPS = [
 
 /**
  * Repères de marché affichés pendant l'attente. Volontairement factuels et
- * vérifiables.
+ * vérifiables — un chiffre inventé pendant une estimation décrédibiliserait
+ * tout le parcours.
  */
 export const DID_YOU_KNOW = [
   'Depuis 2025, les logements classés G au DPE ne peuvent plus être proposés à la location nue en France métropolitaine.',
@@ -19,4 +22,17 @@ export const DID_YOU_KNOW = [
   'Deux biens identiques peuvent se négocier très différemment d’une rue à l’autre : l’emplacement reste le premier critère de valeur.',
   'Les transactions immobilières sont publiques : la base DVF recense les ventes des cinq dernières années, adresse par adresse.',
   'Un bien correctement estimé dès la mise en vente se vend en moyenne bien plus vite qu’un bien surévalué puis rebaissé.',
+]
+
+/**
+ * Créneaux de rappel proposés à la dernière étape du parcours.
+ * `phrase` porte la forme en milieu de phrase (« contactera aujourd’hui »),
+ * `label` la forme autonome utilisée sur le bouton et dans la bulle de
+ * réponse — les deux diffèrent uniquement par la casse.
+ */
+export const CALLBACK_SLOTS = [
+  { id: 'aujourdhui', label: 'Aujourd’hui', phrase: 'aujourd’hui' },
+  { id: 'demain-matin', label: 'Demain matin', phrase: 'demain matin' },
+  { id: 'demain-apres-midi', label: 'Demain après-midi', phrase: 'demain après-midi' },
+  { id: 'semaine', label: 'Dans la semaine', phrase: 'dans la semaine' },
 ]

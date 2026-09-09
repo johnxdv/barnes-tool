@@ -1,49 +1,120 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { Loader2, MapPin } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { EstimationAddressStep } from './components/estimation/EstimationAddressStep'
+import { EstimationBuildingStep } from './components/estimation/EstimationBuildingStep'
 import { EstimationLoadingStep } from './components/estimation/EstimationLoadingStep'
-import { PROPERTY_ADDRESS } from './config/property'
+import { EstimationResultStep } from './components/estimation/EstimationResultStep'
+import { requestEstimation } from './lib/estimation'
 import { EASE } from './lib/motion'
 
-// Leaflet et la carte pèsent ~150 ko : chargés à la demande.
-const BuildingMap = lazy(() =>
-  import('./components/estimation/BuildingMap').then((m) => ({ default: m.BuildingMap })),
-)
+/**
+ * Étapes majeures du parcours, dans l'ordre — base de la barre de progression
+ * globale. L'écran résultat couvre à la fois le repos, la conversation de
+ * capture et la confirmation finale : les trois se jouent sur le même écran.
+ */
+const STAGES = ['adresse', 'batiment', 'analyse', 'resultat']
 
 /**
- * Parcours réduit à trois écrans successifs dans une même page, sans navigation
- * d'URL :
+ * Outil d'estimation — parcours en écrans successifs dans une même page (aucune
+ * navigation d'URL entre les étapes) : saisie de l'adresse, repérage du
+ * bâtiment sur photo aérienne, analyse, puis résultat flouté avec conversation
+ * de capture intégrée qui se conclut sur la confirmation et le déblocage du
+ * prix.
  *
- *   1. `batiment` — vue satellite IGN centrée sur l'adresse fixée en dur
- *      (`src/config/property.js`), sélection du bâtiment sur la photo aérienne.
- *   2. `analyse`  — écran de chargement d'une durée fixe (~12 s), purement
- *      visuel : aucun backend n'est appelé.
- *   3. `suite`    — point d'accroche pour la suite du parcours, à coder ensuite.
+ * Le montant est calculé pour de bon : le clic sur « Obtenir une estimation
+ * instantanée » lance la requête au moteur (`api/estimation.js`, base DVF) en
+ * même temps que l'animation d'analyse, et le résultat est appliqué à la fin
+ * de celle-ci.
  */
-const STEPS = ['batiment', 'analyse', 'suite']
-
 export default function App() {
-  const [step, setStep] = useState('batiment')
+  const [step, setStep] = useState('adresse')
+  const [address, setAddress] = useState(null)
+  // Sélection confirmée sur la carte : bâtiment, coordonnées, emprise, type
+  // détecté, parcelle et fiche BDNB. Charge utile du calcul, conservée ici pour
+  // n'avoir pas à être redemandée.
   const [selection, setSelection] = useState(null)
+  const [price, setPrice] = useState(null)
+  // Calcul en cours, conservé comme promesse : démarre avec l'animation
+  // d'analyse et n'est lu qu'à la fin de celle-ci.
+  const pendingEstimate = useRef(null)
+  const reduce = useReducedMotion()
 
-  const goToAnalyse = useCallback(() => setStep('analyse'), [])
-  const goToSuite = useCallback(() => setStep('suite'), [])
+  // Avancement à l'intérieur de l'étape courante (0 à 1) — les sous-écrans qui
+  // en ont un le remontent via `onProgress`.
+  const [stageProgress, setStageProgress] = useState(0)
 
-  // Préchargement du module carte dès le montage.
-  useEffect(() => {
-    import('./components/estimation/BuildingMap')
+  const goToStep = useCallback((nextStep, localProgress = 0) => {
+    setStageProgress(localProgress)
+    setStep(nextStep)
   }, [])
 
-  const globalPct = Math.round((STEPS.indexOf(step) / (STEPS.length - 1)) * 100)
+  const goToBuilding = useCallback(
+    (confirmed) => {
+      setAddress(confirmed)
+      goToStep('batiment')
+    },
+    [goToStep],
+  )
+
+  // Le calcul est lancé une seule fois, au démarrage de l'écran d'analyse, et
+  // court en arrière-plan de l'animation — laquelle garde son déroulé complet.
+  const startAnalysis = useCallback(
+    (confirmedSelection) => {
+      setSelection(confirmedSelection)
+      setPrice(null)
+      pendingEstimate.current = requestEstimation(confirmedSelection)
+      goToStep('analyse')
+    },
+    [goToStep],
+  )
+
+  // Fin de l'animation : le montant est très largement calculé à ce stade.
+  // `requestEstimation` ne rejette jamais.
+  const showResult = useCallback(async () => {
+    setPrice(await pendingEstimate.current)
+    goToStep('resultat')
+  }, [goToStep])
+
+  // La conversation vient de se conclure : `EstimationResultStep` bascule en
+  // interne vers son écran de confirmation, sans quitter cette étape.
+  const finishChat = useCallback(() => setStageProgress(1), [])
+
+  // Fin du parcours — on repart de l'étape adresse pour une nouvelle estimation.
+  const restart = useCallback(() => {
+    setAddress(null)
+    setSelection(null)
+    setPrice(null)
+    pendingEstimate.current = null
+    goToStep('adresse')
+  }, [goToStep])
+
+  // Le module carte est chargé à la demande (Leaflet ne sert qu'aux étapes
+  // suivantes). On l'amorce dès la saisie de l'adresse.
+  useEffect(() => {
+    if (step !== 'adresse') return
+    import('./components/estimation/BuildingMap')
+  }, [step])
+
+  const stageIndex = STAGES.indexOf(step)
+  const globalPct = Math.round(((stageIndex + stageProgress) / STAGES.length) * 100)
+
+  const variants = {
+    enter: { opacity: 0, x: reduce ? 0 : 24 },
+    center: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: reduce ? 0 : -24 },
+  }
 
   return (
-    <div className="flex min-h-screen flex-col bg-stone">
+    <>
+      {/* Barre de progression globale — persistante du premier écran à la
+          confirmation finale, logée en haut de la fenêtre. Reste au-dessus des
+          fenêtres modales du parcours (z-[60]) : z-[70]. */}
       <div
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={globalPct}
-        aria-label="Progression du parcours"
+        aria-label="Progression du parcours d’estimation"
         className="fixed inset-x-0 top-0 z-[70] h-2 bg-ink/10"
       >
         <div
@@ -52,120 +123,47 @@ export default function App() {
         />
       </div>
 
-      <section className="flex min-h-screen items-center justify-center px-5 py-20 sm:px-8 sm:py-24">
-        {step === 'batiment' ? (
-          <BuildingStep
-            selection={selection}
-            onSelect={setSelection}
-            onContinue={goToAnalyse}
-          />
-        ) : null}
-
-        {step === 'analyse' ? <EstimationLoadingStep onDone={goToSuite} /> : null}
-
-        {step === 'suite' ? <NextStepPlaceholder /> : null}
-      </section>
-    </div>
-  )
-}
-
-/**
- * Étape 1 — repérage du bien sur la photo aérienne.
- *
- * L'adresse est affichée en clair mais n'est ni modifiable ni recherchable :
- * elle vient de `PROPERTY_ADDRESS`. Sélectionner un bâtiment (ou, si les
- * contours manquent, un point sur la photo) débloque le passage à l'analyse.
- */
-function BuildingStep({ selection, onSelect, onContinue }) {
-  const { label, lat, lon } = PROPERTY_ADDRESS
-
-  return (
-    <div className="w-full max-w-3xl">
-      <h1 className="text-center font-display text-[1.6rem] font-semibold leading-tight text-ink sm:text-[2rem]">
-        Cliquez sur votre bien
-      </h1>
-      <p className="mx-auto mt-4 max-w-md text-center text-[0.95rem] leading-relaxed text-ink/55">
-        Sur la vue aérienne, sélectionnez le bâtiment concerné.
-      </p>
-
-      {/* Rappel de l'adresse — figée, ni champ ni bouton. */}
-      <p className="mx-auto mt-6 flex max-w-xl items-center justify-center gap-2.5 rounded-full border border-ink/10 bg-white px-4 py-2.5 text-center text-[0.8rem] leading-snug text-ink/70 sm:text-sm">
-        <MapPin className="h-4 w-4 shrink-0 text-brass" strokeWidth={1.75} aria-hidden="true" />
-        {label}
-      </p>
-
-      <div className="mt-6">
-        <Suspense fallback={<MapPlaceholder />}>
-          <BuildingMap
-            lat={lat}
-            lon={lon}
-            addressLabel={label}
-            selection={selection}
-            onSelect={onSelect}
-          />
-        </Suspense>
-      </div>
-
-      <AnimatePresence>
-        {selection ? (
+      <section className="flex min-h-screen items-center justify-center bg-stone px-5 py-20 sm:px-8 sm:py-24">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.28, ease: EASE }}
-            className="mt-6 flex flex-col items-center gap-3"
+            key={step}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: reduce ? 0.2 : 0.4, ease: EASE }}
+            className="flex w-full justify-center"
           >
-            <button
-              type="button"
-              onClick={onContinue}
-              className="rounded-xl bg-ink px-6 py-4 font-mono text-[0.7rem] uppercase tracking-micro text-white shadow-[0_8px_20px_-10px_rgba(16,20,28,0.55)] transition-shadow duration-300 ease-plan hover:shadow-[0_10px_24px_-10px_rgba(16,20,28,0.6)]"
-            >
-              Lancer l’analyse
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelect(null)}
-              className="text-[0.8rem] text-ink/40 underline-offset-4 transition-colors hover:text-ink/70 hover:underline"
-            >
-              Modifier ma sélection
-            </button>
+            {step === 'adresse' ? (
+              <EstimationAddressStep onConfirm={goToBuilding} />
+            ) : null}
+
+            {step === 'batiment' && address ? (
+              <EstimationBuildingStep
+                address={address}
+                onBack={() => goToStep('adresse')}
+                onEstimate={startAnalysis}
+                onProgress={setStageProgress}
+              />
+            ) : null}
+
+            {step === 'analyse' ? (
+              <EstimationLoadingStep onDone={showResult} onProgress={setStageProgress} />
+            ) : null}
+
+            {step === 'resultat' && address ? (
+              <EstimationResultStep
+                address={address}
+                price={price}
+                onBack={() => goToStep('batiment')}
+                onDone={finishChat}
+                onProgress={setStageProgress}
+                onClose={restart}
+              />
+            ) : null}
           </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </div>
-  )
-}
-
-function MapPlaceholder() {
-  return (
-    <div className="flex h-[62vh] max-h-[560px] min-h-[340px] w-full items-center justify-center overflow-hidden rounded-2xl border border-ink/10 bg-ink shadow-[0_22px_54px_-18px_rgba(16,20,28,0.45)] sm:h-[480px]">
-      <span
-        role="status"
-        className="inline-flex items-center gap-3 font-mono text-[0.62rem] uppercase tracking-micro text-stone/60"
-      >
-        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} aria-hidden="true" />
-        Chargement de la vue satellite
-      </span>
-    </div>
-  )
-}
-
-/**
- * Fin du chargement — point d'accroche pour la suite du parcours (résultat,
- * capture de contact…), qui sera codée ensuite.
- */
-function NextStepPlaceholder() {
-  return (
-    <div className="w-full max-w-md text-center">
-      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-ink text-brass">
-        <MapPin className="h-6 w-6" strokeWidth={1.5} aria-hidden="true" />
-      </span>
-      <h1 className="mt-6 font-display text-[1.8rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">
-        À suivre
-      </h1>
-      <p className="mx-auto mt-4 max-w-sm text-[0.95rem] leading-relaxed text-ink/55">
-        L’analyse est terminée. La suite du parcours reste à construire.
-      </p>
-    </div>
+        </AnimatePresence>
+      </section>
+    </>
   )
 }

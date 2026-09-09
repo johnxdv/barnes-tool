@@ -3,11 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Barnes — repérage du bien sur vue satellite + écran d'analyse",
+  "description": "Barnes — outil d'estimation : recherche d'adresse, repérage sur vue satellite, moteur DVF/cadastre",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "npm run check:api && vite build",
+    "preview": "vite preview",
+    "check:api": "node scripts/check-api-imports.mjs"
   },
   "dependencies": {
     "framer-motion": "^11.5.4",
