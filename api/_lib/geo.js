@@ -1,27 +1,15 @@
 // Géométrie et découpage administratif — briques partagées par le moteur
-// d'estimation. Aucune dépendance : tout tient en quelques formules, et un
-// paquet de plus alourdirait inutilement la fonction serverless.
+// d'estimation. Aucune dépendance extérieure : tout tient en quelques formules,
+// et un paquet de plus alourdirait inutilement la fonction serverless.
 
-const EARTH_RADIUS_M = 6371008.8
+// La haversine n'est plus définie ici : elle sert aussi au relevé des
+// commodités, qui est parti dans le navigateur (`src/lib/poi.js`). Une seule
+// définition, côté front, réexportée ici pour tous les modules d'`api/` qui
+// l'appelaient déjà — l'extension `.js` est obligatoire, Vercel exécute ce
+// répertoire en ESM Node pur (voir `scripts/check-api-imports.mjs`).
+export { distanceM } from '../../src/lib/geo.js'
 
 const toRad = (deg) => (deg * Math.PI) / 180
-
-/**
- * Distance orthodromique entre deux points, en mètres (formule de haversine).
- *
- * Suffisamment exacte aux échelles qui nous concernent (quelques kilomètres),
- * et surtout assez rapide pour être appelée sur des dizaines de milliers de
- * ventes sans peser sur le budget de temps.
- */
-export function distanceM(lat1, lon1, lat2, lon2) {
-  const dLat = toRad(lat2 - lat1)
-  const dLon = toRad(lon2 - lon1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
-
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(a)))
-}
 
 /**
  * Code département déduit d'un code commune INSEE.

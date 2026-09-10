@@ -1,27 +1,36 @@
 // Fonction serverless Vercel — assemblage du rapport d'estimation.
 //
 // L'estimation (`api/estimation.js`) rend un montant. Cette fonction-ci rend
-// tout ce qui l'entoure : le quartier, ses commodités, son marché, ses
-// budgets, son historique, les ventes voisines et ce qu'il faut gagner pour
-// acheter. Onze pages de rapport, dont pas une n'est écrite ici — le front
-// reçoit des nombres et des libellés, et les met en page.
+// tout ce qui l'entoure : le quartier, son marché, ses budgets, son historique,
+// les ventes voisines et ce qu'il faut gagner pour acheter. Onze pages de
+// rapport, dont pas une n'est écrite ici — le front reçoit des nombres et des
+// libellés, et les met en page.
 //
-//   a. Points d'intérêt à 500 m       → `_lib/poi.js`      (OpenStreetMap / Overpass)
-//   b. Profil du quartier             → `_lib/quartier.js` (IGN IRIS + Insee Melodi)
-//   c. Prix médian et évolution       → `_lib/secteur.js`  (DVF)
-//   d. Budgets par typologie          → `_lib/secteur.js`  (DVF + `_lib/credit.js`)
-//   e. Historique annuel des ventes   → `_lib/secteur.js`  (DVF)
-//   f. Profil acquéreur               → `_lib/credit.js`   (BCE)
-//   g. Points forts / de réserve      → `_lib/points.js`   (formulaire)
+//   a. Profil du quartier             → `_lib/quartier.js` (IGN IRIS + Insee Melodi)
+//   b. Prix médian et évolution       → `_lib/secteur.js`  (DVF)
+//   c. Budgets par typologie          → `_lib/secteur.js`  (DVF + `_lib/credit.js`)
+//   d. Historique annuel des ventes   → `_lib/secteur.js`  (DVF)
+//   e. Profil acquéreur               → `_lib/credit.js`   (BCE)
+//   f. Points forts / de réserve      → `_lib/points.js`   (formulaire)
+//
+// Une page manque à cette liste, et c'est volontaire : les commodités du
+// quartier. Overpass plafonne par adresse IP, et les quelques IP de sortie de
+// l'hébergeur, partagées avec le reste de sa clientèle, étaient servies assez
+// lentement pour épuiser le budget laissé à chaque instance — la page sortait
+// vide sur un service qui, depuis un poste ordinaire, répond en moins d'une
+// seconde. Le relevé est donc parti dans le navigateur, où chaque visiteur
+// consomme son propre quota (voir `src/lib/poi.js`). Il rejoint les blocs
+// d'ici dans `src/lib/rapport.js`.
 //
 // Deux principes, hérités du moteur d'estimation et valables ici mot pour mot :
 //
 //  - **Aucune source ne peut faire échouer la réponse.** Chaque bloc a son
 //    repli, et un bloc manquant devient une page vide plutôt qu'un rapport
 //    perdu. L'agent a devant lui un client ; il ne peut pas repartir de zéro
-//    parce qu'une instance Overpass était saturée.
-//  - **Toutes les sources sont ouvertes.** Aucune clé d'API, et rien qui
-//    transite par le navigateur.
+//    parce qu'un millésime DVF était indisponible.
+//  - **Toutes les sources sont ouvertes.** Aucune clé d'API, et aucune n'aurait
+//    de raison de transiter par le navigateur — celles qui restent ici sont
+//    celles qu'un serveur sert mieux.
 //
 // À la différence de l'estimation, la réponse n'est pas volontairement pauvre :
 // tout ce qui est calculé descend, puisque tout est destiné à s'afficher. Le
@@ -29,7 +38,6 @@
 // moment, quel que soit le navigateur.
 
 import { communeAtPoint, departementFromInsee } from './_lib/geo.js'
-import { fetchPointsInteret } from './_lib/poi.js'
 import { fetchQuartier } from './_lib/quartier.js'
 import { fetchTaux, profilAcquereur, HYPOTHESES } from './_lib/credit.js'
 import { suggererPoints } from './_lib/points.js'
@@ -48,9 +56,8 @@ import {
  * retard et livrer le reste.
  *
  * Chaque source a par ailleurs son propre délai, dimensionné pour tenir
- * dedans : Overpass 2 × 3,5 s, l'Insee et la BCE 4 à 5 s, DVF 4 s par
- * millésime. L'échéance globale ne sert qu'au cas où toutes traîneraient
- * ensemble.
+ * dedans : l'Insee et la BCE 4 à 5 s, DVF 4 s par millésime. L'échéance globale
+ * ne sert qu'au cas où toutes traîneraient ensemble.
  */
 const BUDGET_MS = 9500
 
@@ -111,16 +118,15 @@ export default async function handler(req, res) {
       (monaco ? null : await communeAtPoint(lat, lon, { signal }).catch(() => null))
     const departement = monaco ? null : departementFromInsee(codeInsee)
 
-    // Les quatre sources ne dépendent pas les unes des autres : les enchaîner
-    // quadruplerait le temps d'assemblage. DVF est de loin la plus lourde, et
+    // Les trois sources ne dépendent pas les unes des autres : les enchaîner
+    // triplerait le temps d'assemblage. DVF est de loin la plus lourde, et
     // c'est elle qui donne son tempo à l'ensemble.
-    const [secteur, poi, quartier, credit] = await Promise.all([
+    const [secteur, quartier, credit] = await Promise.all([
       ouRepli(
         ventesSecteur({ lat, lon, departement, codeInsee, commune: body.commune }, { signal }),
         { sales: [], departementales: [], zone: { niveau: 'aucun', label: null, radiusM: null } },
         'marché DVF',
       ),
-      ouRepli(fetchPointsInteret(lat, lon, { signal }), null, 'points d’intérêt'),
       // La Principauté n'a ni IRIS ni recensement français : la page quartier y
       // reste vide, comme l'est déjà tout le pipeline cadastral.
       monaco
@@ -138,7 +144,8 @@ export default async function handler(req, res) {
     const rapport = {
       genereLe: new Date().toISOString(),
       zone: secteur.zone,
-      poi,
+      // Pas de `poi` : le relevé des commodités est fait par le navigateur et
+      // ajouté au rapport à l'arrivée (voir `src/lib/rapport.js`).
       quartier,
       marche: marcheSecteur(secteur.sales),
       budgets: budgetsParTypologie(secteur.sales, { taux }),
@@ -163,7 +170,6 @@ export default async function handler(req, res) {
         zone: rapport.zone.niveau,
         ventes: secteur.sales.length,
         comparables: rapport.comparables.length,
-        poi: poi?.disponible ?? false,
         quartier: quartier?.niveau ?? 'aucun',
         taux,
         elapsedMs: Date.now() - startedAt,

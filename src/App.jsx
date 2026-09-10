@@ -32,19 +32,24 @@ const STAGES = ['adresse', 'batiment', 'analyse', 'caracteristiques', 'assemblag
  * bâtiment sur photo aérienne, analyse, saisie des caractéristiques détaillées,
  * puis restitution — un rapport de onze pages, modifiable et imprimable.
  *
- * Deux appels au serveur, et deux seulement, à deux moments distincts :
+ * Trois appels au serveur, à trois moments distincts :
  *
- *  - `requestEstimation` part au lancement de l'analyse et rend le montant
- *    (`price`), ainsi que ce que les bases savaient déjà du bien
+ *  - `requestEstimation` part au lancement de l'analyse et rend un premier
+ *    montant (`price`), ainsi que ce que les bases savaient déjà du bien
  *    (`detection`) — la chaîne cadastre → BDNB qu'il déroule pour reconstituer
  *    la surface croise de toute façon la vocation du bâtiment et son
  *    diagnostic énergétique.
- *  - `requestRapport` part à la validation du formulaire, une fois le montant
- *    connu et les caractéristiques saisies : les deux lui sont nécessaires,
- *    pour le profil acquéreur et pour les points forts. Il ne peut donc pas
- *    être anticipé, et l'écran d'assemblage couvre son aller-retour.
+ *  - `requestEstimation` **une seconde fois**, à la validation du formulaire,
+ *    avec la surface habitable que l'agent vient de déclarer. Le premier
+ *    montant reposait sur une surface reconstituée depuis l'emprise au sol et
+ *    un nombre de niveaux présumé ; celui-ci repose sur une surface connue, et
+ *    c'est lui que le rapport retient. Voir `saveCharacteristics`.
+ *  - `requestRapport` part dans la foulée, une fois le montant définitif connu
+ *    et les caractéristiques saisies : les deux lui sont nécessaires, pour le
+ *    profil acquéreur et pour les points forts. Il ne peut donc pas être
+ *    anticipé, et l'écran d'assemblage couvre les deux allers-retours.
  *
- * Aucun des deux ne rejette : un parcours ne s'interrompt pas sur une source
+ * Aucun des trois ne rejette : un parcours ne s'interrompt pas sur une source
  * indisponible.
  */
 export default function App() {
@@ -54,8 +59,11 @@ export default function App() {
   // détecté, parcelle et fiche BDNB. Charge utile du calcul, conservée ici pour
   // n'avoir pas à être redemandée.
   const [selection, setSelection] = useState(null)
-  // Montant renvoyé par le moteur : calculé pendant l'analyse, gardé pour un
-  // usage ultérieur même si aucun écran ne l'affiche encore.
+  // Montant renvoyé par le moteur. Une première fois pendant l'analyse, sur la
+  // surface que les bases ont su reconstituer ; une seconde fois à la
+  // validation du formulaire, sur la surface déclarée par l'agent — c'est
+  // celui-là qui part au rapport (voir `saveCharacteristics`). Aucun écran ne
+  // l'affiche avant.
   const [price, setPrice] = useState(null)
   // Caractéristiques que les bases connaissaient déjà du bien — type et classe
   // énergie — rapportées par le même appel que le montant. Elles arrivent donc
@@ -122,21 +130,53 @@ export default function App() {
     goToStep('caracteristiques')
   }, [goToStep])
 
-  // Formulaire validé : on retient les caractéristiques et l'assemblage du
-  // rapport part aussitôt, derrière l'écran d'attente.
+  // Formulaire validé : on retient les caractéristiques, on refait le calcul
+  // sur la surface que l'agent vient de déclarer, puis l'assemblage du rapport
+  // part — le tout derrière l'écran d'attente.
   //
-  // L'appel ne pouvait pas être anticipé — il lui faut le montant *et* le
-  // formulaire — mais il ne dépend plus de rien d'autre : `values` lui est
-  // passé directement plutôt que relu dans l'état, qui n'aura pas encore été
-  // rafraîchi à cet instant du traitement.
+  // Le montant obtenu pendant l'analyse reposait sur une surface reconstituée :
+  // emprise au sol du bâtiment × nombre de niveaux présumé. Le formulaire vient
+  // d'en donner une vraie, et le rapport affiche les deux côte à côte — la
+  // surface en page « caractéristiques », le prix et son prix au m² en page
+  // « estimation de valeur ». Les laisser diverger revenait à imprimer, sur le
+  // même document, un montant qui n'a jamais eu affaire à la surface annoncée.
+  // On relance donc le moteur avec elle, et c'est ce second montant qui fait
+  // foi partout ensuite.
+  //
+  // Rien à relancer si l'agent n'a pas touché au curseur : la charge utile
+  // serait identique à celle de l'analyse, et la réponse aussi. Le montant de
+  // l'analyse est alors conservé — la page « estimation de valeur » n'affichera
+  // de toute façon aucun prix au m², faute de surface à laquelle le rapporter.
+  //
+  // L'assemblage du rapport ne pouvait pas être anticipé — il lui faut le
+  // montant *et* le formulaire — et il attend maintenant le montant définitif :
+  // les deux allers-retours s'enchaînent, l'écran d'assemblage les couvre sans
+  // limite de durée (voir `EstimationRapportStep`). `values` et le prix relu
+  // lui sont passés directement plutôt que relus dans l'état, qui n'aura pas
+  // encore été rafraîchi à cet instant du traitement.
   const saveCharacteristics = useCallback(
-    (values) => {
+    async (values) => {
       setCharacteristics(values)
       setRapport(null)
+      goToStep('assemblage')
+
+      const surfaceM2 = values?.surfaceHabitable ?? null
+
+      // `requestEstimation` ne rejette jamais ; un échec rend un montant `null`,
+      // qu'on ne laisse pas écraser celui de l'analyse — un rapport avec un
+      // prix approché vaut mieux qu'un rapport sans prix.
+      const recalcule =
+        surfaceM2 == null
+          ? price
+          : ((await requestEstimation({ ...selection, surfaceM2 }))?.price ?? price)
+
+      setPrice(recalcule)
+
       // `requestRapport` ne rejette jamais : un échec complet rend un rapport
       // vide, dont les pages de secteur s'affichent en attente de saisie.
-      requestRapport({ selection, address, price, characteristics: values }).then(setRapport)
-      goToStep('assemblage')
+      setRapport(
+        await requestRapport({ selection, address, price: recalcule, characteristics: values }),
+      )
     },
     [goToStep, selection, address, price],
   )

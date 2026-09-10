@@ -6,16 +6,26 @@
 // l'Insee, plus officielle, s'arrête à la commune — inutilisable pour dire ce
 // qu'il y a à cinq minutes à pied.
 //
-// L'appel part d'ici, c'est-à-dire de la fonction serverless, à la différence
-// du repérage des bâtiments monégasques qui interroge Overpass depuis le
-// navigateur (voir `src/lib/osm.js` côté référence). Le compromis n'est pas le
-// même : Overpass plafonne par adresse IP, et derrière une fonction serverless
-// tout le trafic se concentre sur les quelques IP de sortie de l'hébergeur. La
-// requête est ici bien plus légère qu'un relevé d'emprises — un rayon de 500 m,
-// trois familles d'objets, quelques dizaines de résultats — et elle n'est tirée
-// qu'une fois par rapport, là où la carte en déclenche une par déplacement.
-// Deux instances sont essayées, et l'échec des deux laisse simplement la page
-// vide.
+// L'appel part du navigateur, et c'est le seul bloc du rapport dans ce cas :
+// tous les autres (DVF, Insee, BCE) restent assemblés par `api/rapport.js`.
+//
+// Overpass plafonne par adresse IP, et sert les requêtes des IP les plus
+// sollicitées au ralenti avant de les refuser franchement. Derrière une
+// fonction serverless, tout le trafic se concentrait sur les quelques IP de
+// sortie de l'hébergeur, partagées avec le reste de sa clientèle : les deux
+// instances dépassaient l'une après l'autre le budget qui leur était laissé, et
+// la page des commodités sortait vide, à remplir à la main — pour un service
+// qui, interrogé depuis un poste ordinaire, répond en moins d'une seconde.
+// Depuis le navigateur, chaque visiteur consomme son propre quota, et le
+// rapport d'un agent ne peut plus être privé de ses commodités par le rapport
+// d'un autre. C'est le raisonnement déjà tenu pour les emprises monégasques,
+// que la carte va chercher elle-même — Overpass sert délibérément un en-tête
+// CORS ouvert pour l'usage direct depuis une page web.
+//
+// Deux instances sont essayées, et l'échec des deux laisse la page vide, avec
+// sa mention « à compléter à la main ». Ce repli est conservé — un service
+// bénévole peut toujours être en maintenance — mais il redevient ce qu'il
+// aurait toujours dû être : l'exception.
 
 import { distanceM } from './geo.js'
 
@@ -36,15 +46,19 @@ const OVERPASS_TIMEOUT_S = 10
 /**
  * Budget client, par instance.
  *
- * Court, et pour une raison précise : deux instances sont essayées l'une après
- * l'autre, et leur somme doit tenir dans le budget global de la fonction
- * (voir `BUDGET_MS` dans `api/rapport.js`). À six secondes chacune, un premier
- * miroir en panne consommait tout le budget et le second était interrompu en
- * plein vol — la page des commodités sortait vide alors qu'un serveur
- * répondait. En pratique, une instance en état de marche répond en moins de
- * deux secondes.
+ * Nettement plus large que du temps où l'appel vivait dans la fonction
+ * serverless : il n'a plus à tenir dans le budget global de celle-ci (voir
+ * `BUDGET_MS` dans `api/rapport.js`), seulement dans la patience de l'écran
+ * d'assemblage, qui attend sans limite. Les 3,5 s d'alors coupaient un premier
+ * miroir lent avant qu'il ait répondu ; ici, deux instances peuvent être
+ * essayées à fond l'une après l'autre. En pratique, une instance en état de
+ * marche répond en moins de deux secondes.
+ *
+ * Même valeur que pour les emprises monégasques (`FETCH_TIMEOUT_MS` dans
+ * `osm.js` côté référence) : c'est le même service, sollicité depuis le même
+ * navigateur.
  */
-const FETCH_TIMEOUT_MS = 3500
+const FETCH_TIMEOUT_MS = 9000
 
 /**
  * Résultats détaillés conservés par catégorie.
@@ -57,23 +71,14 @@ const FETCH_TIMEOUT_MS = 3500
  */
 const MAX_PAR_CATEGORIE = 4
 
-/**
- * En-tête d'identification, exigé — pas seulement recommandé.
- *
- * `fetch` sous Node annonce un agent générique, qu'`overpass-api.de` refuse
- * d'un 406 sans autre explication : la requête part, revient en erreur, et rien
- * dans le corps ne dit que c'est l'en-tête qui la fait rejeter. Le miroir Kumi,
- * lui, l'accepte — de sorte que sans cette ligne le repli fonctionnerait, en
- * masquant que l'instance principale n'est jamais atteinte.
- *
- * C'est par ailleurs la règle d'usage des instances Overpass publiques :
- * s'identifier, pour qu'un trafic anormal puisse être imputé plutôt que
- * l'ensemble des IP de sortie de l'hébergeur bloqué d'un bloc.
- */
-// ASCII strictement : un en-tête HTTP est une suite d'octets, et l'apostrophe
-// typographique du reste du code y ferait échouer la requête avant même de
-// partir.
-const USER_AGENT = 'barnes-estimation/1.0 (outil estimation immobiliere)'
+// Aucun en-tête d'identification n'est posé ici, et ce n'est pas un oubli.
+// `User-Agent` figure parmi les en-têtes interdits à `fetch` dans un
+// navigateur : le poser ne le poserait pas, il ferait seulement échouer la
+// requête. Il était en revanche indispensable du temps où l'appel partait de
+// Node — `overpass-api.de` refusait l'agent générique d'un 406 muet, et seul le
+// miroir Kumi répondait. Les instances publiques n'attendent d'identification
+// que des clients automatisés ; le navigateur d'un utilisateur envoie déjà le
+// sien, et c'est celui qu'Overpass veut voir.
 
 /**
  * Catégories restituées, et les mots-clés OpenStreetMap qui les composent.
@@ -179,10 +184,9 @@ async function queryOverpass(endpoint, query, signal) {
 
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': USER_AGENT,
-    },
+    // Overpass attend sa requête dans un champ `data` de formulaire ; le corps
+    // brut lui vaut un refus sur certaines instances.
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ data: query }),
     signal: signal ? AbortSignal.any([signal, budget]) : budget,
   })
@@ -251,7 +255,7 @@ export async function fetchPointsInteret(lat, lon, { signal } = {}) {
       break
     } catch (error) {
       if (signal?.aborted) throw error
-      console.error(`[rapport] Overpass ${endpoint} —`, error?.message ?? error)
+      console.error(`[commodités] Overpass ${endpoint} —`, error?.message ?? error)
     }
   }
 

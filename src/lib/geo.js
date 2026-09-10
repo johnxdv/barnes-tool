@@ -1,6 +1,37 @@
 const EARTH_RADIUS_M = 6378137
 
+/**
+ * Rayon moyen du globe — celui des distances, là où `EARTH_RADIUS_M` ci-dessus
+ * est le rayon équatorial, qui sert aux aires. Les deux valeurs diffèrent de
+ * 0,1 % ; l'écart est sans conséquence ici, mais mélanger les deux formules
+ * sur une même constante le serait moins.
+ */
+const EARTH_MEAN_RADIUS_M = 6371008.8
+
 const toRad = (deg) => (deg * Math.PI) / 180
+
+/**
+ * Distance orthodromique entre deux points, en mètres (formule de haversine).
+ *
+ * Suffisamment exacte aux échelles qui nous concernent (quelques kilomètres),
+ * et surtout assez rapide pour être appelée sur des dizaines de milliers de
+ * ventes sans peser sur le budget de temps.
+ *
+ * Partagée avec les fonctions serverless, qui la réexportent depuis
+ * `api/_lib/geo.js` : elle est employée des deux côtés — au relevé des
+ * commodités dans le navigateur (`src/lib/poi.js`), au tri des ventes DVF sur
+ * le serveur — et deux haversines valant chacune pour la moitié du produit
+ * finiraient par diverger d'un rayon terrestre.
+ */
+export function distanceM(lat1, lon1, lat2, lon2) {
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+
+  return 2 * EARTH_MEAN_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(a)))
+}
 
 /**
  * Aire d'un anneau de coordonnées [lon, lat], en m², par la formule de
