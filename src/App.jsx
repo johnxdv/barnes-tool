@@ -1,38 +1,51 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check } from 'lucide-react'
 import { EstimationAddressStep } from './components/estimation/EstimationAddressStep'
 import { EstimationBuildingStep } from './components/estimation/EstimationBuildingStep'
 import { EstimationLoadingStep } from './components/estimation/EstimationLoadingStep'
 import { EstimationCharacteristicsStep } from './components/estimation/EstimationCharacteristicsStep'
-// EstimationResultStep n'est plus dans l'enchaînement — le fichier est conservé,
-// il sera rebranché quand l'affichage du prix reviendra après « caractéristiques ».
+import { EstimationRapportStep } from './components/estimation/EstimationRapportStep'
+import { RapportView } from './components/rapport/RapportView'
+// EstimationResultStep n'est plus dans l'enchaînement : la révélation du prix
+// et la conversation de capture qu'elle porte ont cédé la place au rapport, qui
+// restitue le montant sur sa page « Estimation de valeur ». Le fichier est
+// conservé — c'est le seul écran du parcours à recueillir des coordonnées, et
+// rien ne l'a remplacé sur ce point.
 import { AUCUNE_DETECTION, requestEstimation } from './lib/estimation'
+import { RAPPORT_VIDE, requestRapport } from './lib/rapport'
 
 /**
  * Étapes majeures du parcours, dans l'ordre — base de la barre de progression
- * globale : adresse → bâtiment → analyse → caractéristiques.
+ * globale : adresse → bâtiment → analyse → caractéristiques → assemblage.
  *
- * L'étape `resultat` (affichage du prix) est temporairement retirée : l'analyse
- * enchaîne désormais sur le formulaire de caractéristiques, qui n'a encore rien
- * après lui (écran « à suivre »).
+ * Le rapport lui-même (`rapport`) n'y figure pas : il est l'aboutissement, pas
+ * une étape de plus. La barre y est pleine, et disparaît à l'impression.
+ *
+ * L'écran de révélation du prix (`EstimationResultStep`) reste hors du
+ * parcours : le montant est désormais restitué par le rapport, sur sa page
+ * « Estimation de valeur ».
  */
-const STAGES = ['adresse', 'batiment', 'analyse', 'caracteristiques']
+const STAGES = ['adresse', 'batiment', 'analyse', 'caracteristiques', 'assemblage']
 
 /**
  * Outil d'estimation — parcours en écrans successifs dans une même page (aucune
  * navigation d'URL entre les étapes) : saisie de l'adresse, repérage du
- * bâtiment sur photo aérienne, analyse, puis saisie des caractéristiques
- * détaillées du bien.
+ * bâtiment sur photo aérienne, analyse, saisie des caractéristiques détaillées,
+ * puis restitution — un rapport de onze pages, modifiable et imprimable.
  *
- * Le montant est tout de même calculé : `requestEstimation` part au lancement
- * de l'analyse (`api/estimation.js`, base DVF) et son résultat est conservé
- * dans l'état (`price`) pour être réutilisé plus tard — l'écran qui l'affiche
- * n'est simplement plus branché pour l'instant.
+ * Deux appels au serveur, et deux seulement, à deux moments distincts :
  *
- * Le même appel rapporte au passage ce que les bases savaient déjà du bien
- * (`detection`) : la chaîne cadastre → BDNB qu'il déroule pour reconstituer la
- * surface croise de toute façon la vocation du bâtiment et son diagnostic
- * énergétique. Cet état-là, contrairement au prix, sert dès l'étape suivante.
+ *  - `requestEstimation` part au lancement de l'analyse et rend le montant
+ *    (`price`), ainsi que ce que les bases savaient déjà du bien
+ *    (`detection`) — la chaîne cadastre → BDNB qu'il déroule pour reconstituer
+ *    la surface croise de toute façon la vocation du bâtiment et son
+ *    diagnostic énergétique.
+ *  - `requestRapport` part à la validation du formulaire, une fois le montant
+ *    connu et les caractéristiques saisies : les deux lui sont nécessaires,
+ *    pour le profil acquéreur et pour les points forts. Il ne peut donc pas
+ *    être anticipé, et l'écran d'assemblage couvre son aller-retour.
+ *
+ * Aucun des deux ne rejette : un parcours ne s'interrompt pas sur une source
+ * indisponible.
  */
 export default function App() {
   const [step, setStep] = useState('adresse')
@@ -54,6 +67,11 @@ export default function App() {
   // champs laissés de côté y valent `null` — à distinguer d'un zéro déclaré au
   // moment de les restituer.
   const [characteristics, setCharacteristics] = useState(null)
+  // Blocs de secteur assemblés par `api/rapport.js` — commodités, quartier,
+  // marché, budgets, historique, comparables, taux. `null` tant que l'appel
+  // court ; les corrections que l'agent apportera ensuite vivent ailleurs, dans
+  // le rapport lui-même (voir `RapportEdition`), et ne sont pas concernées.
+  const [rapport, setRapport] = useState(null)
   // Calcul en cours, conservé comme promesse : démarre avec l'animation
   // d'analyse et n'est lu qu'à la fin de celle-ci.
   const pendingEstimate = useRef(null)
@@ -104,14 +122,23 @@ export default function App() {
     goToStep('caracteristiques')
   }, [goToStep])
 
-  // Formulaire validé : on stocke les valeurs et on affiche l'écran « à suivre »
-  // — rien n'est encore branché sur le calcul de prix ni sur un export.
+  // Formulaire validé : on retient les caractéristiques et l'assemblage du
+  // rapport part aussitôt, derrière l'écran d'attente.
+  //
+  // L'appel ne pouvait pas être anticipé — il lui faut le montant *et* le
+  // formulaire — mais il ne dépend plus de rien d'autre : `values` lui est
+  // passé directement plutôt que relu dans l'état, qui n'aura pas encore été
+  // rafraîchi à cet instant du traitement.
   const saveCharacteristics = useCallback(
     (values) => {
       setCharacteristics(values)
-      goToStep('suite')
+      setRapport(null)
+      // `requestRapport` ne rejette jamais : un échec complet rend un rapport
+      // vide, dont les pages de secteur s'affichent en attente de saisie.
+      requestRapport({ selection, address, price, characteristics: values }).then(setRapport)
+      goToStep('assemblage')
     },
-    [goToStep],
+    [goToStep, selection, address, price],
   )
 
   // Repart de l'étape adresse pour une nouvelle estimation.
@@ -121,6 +148,7 @@ export default function App() {
     setPrice(null)
     setDetection(AUCUNE_DETECTION)
     setCharacteristics(null)
+    setRapport(null)
     pendingEstimate.current = null
     goToStep('adresse')
   }, [goToStep])
@@ -134,7 +162,7 @@ export default function App() {
 
   const stageIndex = STAGES.indexOf(step)
   const globalPct =
-    step === 'suite'
+    step === 'rapport'
       ? 100
       : Math.round(((stageIndex + stageProgress) / STAGES.length) * 100)
 
@@ -164,13 +192,17 @@ export default function App() {
           défilable (le formulaire de caractéristiques dépasse la hauteur
           d'écran). `items-center` seul, ou des marges auto sur l'axe
           transversal, rendraient le haut inatteignable. */}
-      <section className="flex min-h-screen flex-col items-center bg-stone px-5 py-20 sm:px-8 sm:py-24">
+      {/* Les variantes `print:` neutralisent le cadre du parcours au moment de
+          l'impression — fond, marges, centrage vertical : sur papier, seules
+          les feuilles du rapport subsistent (voir `@media print` dans
+          `index.css`). */}
+      <section className="flex min-h-screen flex-col items-center bg-stone px-5 py-20 sm:px-8 sm:py-24 print:block print:min-h-0 print:bg-white print:p-0">
         {/* Transition entre étapes sans animation au niveau de la page : chaque
             écran garde ses propres animations Framer Motion internes, mais un
             wrapper animé ici se figeait par intermittence (écran d'analyse à
             animations en boucle + minuteurs, rendu du formulaire lourd). `key`
             force le remontage propre à chaque changement d'étape. */}
-        <div key={step} className="my-auto flex w-full justify-center">
+        <div key={step} className="my-auto flex w-full justify-center print:my-0 print:block">
           <>
             {step === 'adresse' ? (
               <EstimationAddressStep onConfirm={goToBuilding} />
@@ -197,38 +229,29 @@ export default function App() {
               />
             ) : null}
 
-            {step === 'suite' ? <NextStepPlaceholder onRestart={restart} /> : null}
+            {/* L'écran d'assemblage tient l'attente pendant que le rapport se
+                monte, et ne rend la main que lorsqu'il est là : `pret` porte
+                l'arrivée de la réponse, l'écran y ajoute sa durée plancher. */}
+            {step === 'assemblage' ? (
+              <EstimationRapportStep pret={rapport !== null} onDone={() => goToStep('rapport')} />
+            ) : null}
+
+            {step === 'rapport' ? (
+              <RapportView
+                address={address}
+                selection={selection}
+                price={price}
+                characteristics={characteristics}
+                // Un assemblage qui n'aurait pas abouti laisse `rapport` à
+                // `null` ; le rapport vide a la même forme et s'affiche avec ses
+                // pages de secteur en attente de saisie.
+                rapport={rapport ?? RAPPORT_VIDE}
+                onRestart={restart}
+              />
+            ) : null}
           </>
         </div>
       </section>
     </>
-  )
-}
-
-/**
- * Écran d'attente provisoire, affiché après la validation du formulaire de
- * caractéristiques — il n'y a encore rien après (affichage du prix, export…).
- */
-function NextStepPlaceholder({ onRestart }) {
-  return (
-    <div className="w-full max-w-md text-center">
-      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-bottle text-white">
-        <Check className="h-7 w-7" strokeWidth={2.25} aria-hidden="true" />
-      </span>
-      <h1 className="mt-6 font-display text-[1.8rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">
-        À suivre
-      </h1>
-      <p className="mx-auto mt-4 max-w-sm text-[0.95rem] leading-relaxed text-ink/55">
-        Vos caractéristiques sont enregistrées. La suite du parcours — estimation
-        détaillée, restitution — reste à construire.
-      </p>
-      <button
-        type="button"
-        onClick={onRestart}
-        className="mt-8 inline-flex touch-manipulation items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-micro text-ink/45 underline-offset-4 transition-colors hover:text-ink hover:underline"
-      >
-        Nouvelle estimation
-      </button>
-    </div>
   )
 }

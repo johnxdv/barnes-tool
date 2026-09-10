@@ -84,3 +84,50 @@ export function priceRange(amount, pct = 0.05) {
 
   return { low: round(n * (1 - pct)), high: round(n * (1 + pct)) }
 }
+
+/**
+ * Pourcentage signé, à une décimale — « + 5,9 % », « − 6,1 % », « stable ».
+ *
+ * Le signe est explicite dans les deux sens : sur une page qui aligne des
+ * évolutions, un « 5,9 % » sans signe se lit aussi bien comme une hausse que
+ * comme le niveau atteint. Le zéro exact devient « stable » plutôt que
+ * « + 0,0 % », qui ferait croire à un arrondi.
+ */
+export function formatPct(valeur) {
+  if (valeur == null || !Number.isFinite(Number(valeur))) return null
+
+  const n = Number(valeur)
+  if (Math.abs(n) < 0.05) return 'stable'
+
+  const signe = n > 0 ? '+' : '−'
+  return `${signe} ${num.format(Math.abs(Math.round(n * 10) / 10))} %`
+}
+
+/** Distance lisible — « 320 m » en deçà du kilomètre, « 1,4 km » au-delà. */
+export function formatDistance(metres) {
+  if (metres == null || !Number.isFinite(Number(metres))) return null
+
+  const m = Number(metres)
+  if (m < 1000) return `${num.format(Math.round(m))} m`
+  return `${num.format(Math.round(m / 100) / 10)} km`
+}
+
+const dateLongue = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
+const moisCourt = new Intl.DateTimeFormat('fr-FR', { month: 'short', year: 'numeric' })
+
+/** Date au long — « 10 septembre 2026 ». Accepte une chaîne ISO ou une `Date`. */
+export function formatDateFr(valeur) {
+  const date = valeur instanceof Date ? valeur : new Date(valeur)
+  return Number.isNaN(date.getTime()) ? null : dateLongue.format(date)
+}
+
+/** Mois abrégé — « sept. 2025 ». Sert aux bornes de période. */
+export function formatMois(valeur) {
+  const date = valeur instanceof Date ? valeur : new Date(valeur)
+  return Number.isNaN(date.getTime()) ? null : moisCourt.format(date)
+}

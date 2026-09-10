@@ -22,6 +22,58 @@ export const ORTHO_TILE_URL =
  */
 export const ORTHO_MAX_NATIVE_ZOOM = 19
 
+// --- Vue aérienne figée ----------------------------------------------------
+
+const WMS_ENDPOINT = 'https://data.geopf.fr/wms-r/wms'
+
+/**
+ * Mètres par degré de latitude. La valeur varie de quelques dixièmes de
+ * pour cent selon la latitude ; à l'échelle d'une vue de quartier, l'écart est
+ * inférieur au pixel.
+ */
+const M_PAR_DEGRE = 111320
+
+/**
+ * Vue aérienne figée d'un point, en une seule image JPEG.
+ *
+ * Le rapport ne peut pas embarquer la carte Leaflet du repérage : elle charge
+ * ses dalles à l'exécution, ne s'imprime pas de façon fiable — le navigateur
+ * n'attend pas les tuiles avant de composer la page — et n'a aucune raison
+ * d'être manipulable une fois le bien choisi. Le service WMS de la même
+ * Géoplateforme rend la vue d'un bloc, à la dimension demandée : une image
+ * ordinaire, qui s'imprime comme telle.
+ *
+ * `spanM` est l'étendue couverte par la hauteur de l'image. La largeur en
+ * découle par le rapport de forme, corrigé du cosinus de la latitude : un degré
+ * de longitude vaut ~0,73 degré de latitude à la hauteur de Marseille, et
+ * l'ignorer étirerait la photo horizontalement.
+ */
+export function orthoImageUrl(lat, lon, { width = 1000, height = 700, spanM = 320 } = {}) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+
+  const demiLat = spanM / 2 / M_PAR_DEGRE
+  const cos = Math.max(Math.cos((lat * Math.PI) / 180), 0.01)
+  const demiLon = (demiLat * (width / height)) / cos
+
+  const params = new URLSearchParams({
+    SERVICE: 'WMS',
+    VERSION: '1.3.0',
+    REQUEST: 'GetMap',
+    LAYERS: 'ORTHOIMAGERY.ORTHOPHOTOS',
+    STYLES: '',
+    FORMAT: 'image/jpeg',
+    // En WMS 1.3.0 et EPSG:4326, l'emprise s'écrit latitude d'abord — à
+    // l'inverse de l'ordre GeoJSON employé partout ailleurs ici. Inversée,
+    // la requête ne lève pas : elle renvoie une image d'ailleurs.
+    CRS: 'EPSG:4326',
+    BBOX: [lat - demiLat, lon - demiLon, lat + demiLat, lon + demiLon].join(','),
+    WIDTH: String(width),
+    HEIGHT: String(height),
+  })
+
+  return `${WMS_ENDPOINT}?${params}`
+}
+
 /** Mention d'attribution imposée par la licence ouverte. */
 export const IGN_ATTRIBUTION = '© IGN — Géoplateforme'
 

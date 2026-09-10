@@ -199,6 +199,156 @@
   }
 }
 
+@layer components {
+  /* --- Rapport d'estimation ---------------------------------------------
+
+     Une page de rapport est une feuille : à l'écran une carte blanche à la
+     proportion d'un A4, à l'impression un A4 véritable. Les deux états
+     partagent le même arbre — il n'y a pas de rendu d'impression séparé —, et
+     c'est la seule façon de garantir que l'agent imprime ce qu'il vient de
+     relire.
+
+     `min-height` plutôt que `height` : une page dont le contenu déborde
+     s'allonge et se coupe proprement, au lieu de tronquer sa fin. */
+  .rapport-page {
+    @apply rounded-xl px-8 py-9 sm:px-11 sm:py-12;
+    min-height: 60rem;
+  }
+
+  /* Zone modifiable. Rien ne la signale au repos : le rapport doit se lire
+     comme un document, pas comme un formulaire. Le survol pose un fond léger
+     et un soulignement pointillé, la mise au point un cadre franc. */
+  .rapport-modifiable {
+    @apply -mx-1 rounded px-1 transition-colors duration-150;
+    cursor: text;
+    /* Une correction longue ne doit pas élargir sa colonne au point de casser
+       la mise en page de la feuille. */
+    overflow-wrap: anywhere;
+  }
+
+  .rapport-modifiable:hover {
+    background: rgba(18, 41, 74, 0.055);
+    box-shadow: inset 0 -1px 0 0 rgba(210, 75, 62, 0.35);
+  }
+
+  .rapport-modifiable:focus,
+  .rapport-modifiable:focus-visible {
+    outline: 2px solid theme('colors.corail');
+    outline-offset: 1px;
+    background: rgba(210, 75, 62, 0.05);
+  }
+
+  /* Champ sans valeur : le texte de remplacement se distingue d'une donnée
+     réelle, faute de quoi « Non renseigné » s'imprimerait comme une réponse. */
+  .rapport-modifiable-vide {
+    @apply italic text-marine/30;
+  }
+
+  /* Ligne retirée du rapport : elle reste visible à l'écran, grisée et barrée,
+     pour pouvoir être rétablie. À l'impression, elle disparaît. */
+  .rapport-masque {
+    @apply opacity-35;
+    text-decoration: line-through;
+    text-decoration-color: theme('colors.corail');
+  }
+}
+
+@media print {
+  /* Format de la feuille. Marge nulle ici, reprise par le rembourrage de la
+     page elle-même : c'est le seul moyen d'y placer un filet de tête qui aille
+     d'un bord à l'autre. */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    /* Le parcours vit sur fond sombre ; le rapport s'imprime sur blanc, sans
+       quoi chaque page consommerait une cartouche entière. */
+    background: #ffffff !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Tout ce qui sert à fabriquer le rapport et non à le lire : barre d'outils,
+     boutons de ligne, indicateurs. Un seul marqueur, posé à la source (voir
+     `OutilLigne` et `BarreOutils`) — un bouton oublié s'imprimerait au milieu
+     du document. */
+  [data-outil='true'] {
+    display: none !important;
+  }
+
+  /* Les lignes que l'agent a retirées ne s'impriment pas — elles ne sont
+     grisées à l'écran que pour pouvoir revenir. */
+  .rapport-masque {
+    display: none !important;
+  }
+
+  /* La barre de progression du parcours et les marges de l'écran d'accueil
+     n'ont plus lieu d'être. */
+  [role='progressbar'] {
+    display: none !important;
+  }
+
+  .rapport-pages {
+    display: block !important;
+    gap: 0 !important;
+    margin: 0 !important;
+  }
+
+  .rapport-page {
+    width: 210mm;
+    min-height: 297mm;
+    max-width: none;
+    margin: 0;
+    padding: 14mm 16mm;
+    border-radius: 0;
+    box-shadow: none !important;
+    /* Une page de rapport = une page de papier. `break-after` coupe après
+       chacune ; `break-inside: avoid` empêche le navigateur de scinder une
+       feuille en deux au milieu d'un tableau. */
+    break-after: page;
+    break-inside: avoid;
+  }
+
+  /* Sans quoi la dernière feuille entraîne une page blanche supplémentaire. */
+  .rapport-page:last-child {
+    break-after: auto;
+  }
+
+  /* Les aplats de couleur — couverture bleu marine, filets, cartes teintées —
+     ne s'impriment pas sans cette instruction : les navigateurs suppriment par
+     défaut les fonds pour économiser l'encre, ce qui rendrait la couverture
+     illisible (texte blanc sur blanc). */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Le champ modifiable redevient du texte ordinaire. */
+  .rapport-modifiable {
+    background: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Un champ resté vide s'imprime en clair plutôt qu'en italique pâle, sinon
+       la mention disparaît à l'impression. */
+  .rapport-modifiable-vide {
+    color: rgba(18, 41, 74, 0.45) !important;
+  }
+
+  /* Un tableau ou une figure ne doit pas se couper entre deux feuilles. */
+  table,
+  figure,
+  img {
+    break-inside: avoid;
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

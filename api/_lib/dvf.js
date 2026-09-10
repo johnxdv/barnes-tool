@@ -29,15 +29,23 @@ const FETCH_TIMEOUT_MS = 4000
  * Colonnes exploitées, repérées par leur nom dans l'en-tête plutôt que par
  * leur position : le schéma DVF a déjà gagné des colonnes d'un millésime à
  * l'autre, un index en dur finirait par désigner la mauvaise.
+ *
+ * `date_mutation` et `nombre_pieces_principales` ne servent pas à l'estimation
+ * — celle-ci ne demande qu'une médiane au m² — mais aux statistiques de
+ * secteur du rapport : la première découpe les ventes en périodes et en
+ * millésimes, la seconde les range par typologie (T2, T3…). Voir
+ * `_lib/secteur.js`.
  */
 const COLUMNS = [
   'id_mutation',
+  'date_mutation',
   'nature_mutation',
   'valeur_fonciere',
   'code_commune',
   'id_parcelle',
   'type_local',
   'surface_reelle_bati',
+  'nombre_pieces_principales',
   'surface_terrain',
   'code_nature_culture',
   'longitude',
@@ -142,10 +150,16 @@ function reduceMutation(rows) {
 
   let kind = null
   let surface = null
+  // Nombre de pièces principales — renseigné pour les seuls logements, et
+  // encore : la colonne est vide sur une part non négligeable des mutations.
+  // Un `null` traverse donc tout le calcul jusqu'aux typologies, qui écartent
+  // simplement les ventes sans pièces plutôt que de leur en supposer.
+  let rooms = null
 
   if (dwellings.length === 1) {
     kind = DWELLING[dwellings[0].type_local]
     surface = readNumber(dwellings[0].surface_reelle_bati)
+    rooms = readNumber(dwellings[0].nombre_pieces_principales)
   } else if (dwellings.length === 0) {
     // Aucun local bâti : terrain. Une dépendance vendue seule (garage, cave)
     // porterait elle aussi un `type_local`, elle est donc déjà écartée — sans
@@ -176,7 +190,21 @@ function reduceMutation(rows) {
   const lon = readNumber(located?.longitude)
   if (lat === null || lon === null) return null
 
-  return { kind, lat, lon, pricePerM2, price, surface, commune: first.code_commune }
+  return {
+    kind,
+    lat,
+    lon,
+    pricePerM2,
+    price,
+    surface,
+    // Date au format `AAAA-MM-JJ`, telle que publiée : conservée en chaîne
+    // plutôt qu'en `Date`, elle se compare et se tranche par simple ordre
+    // lexicographique et ne coûte pas un objet par vente sur des centaines de
+    // milliers de lignes.
+    date: first.date_mutation || null,
+    rooms: rooms && rooms > 0 ? rooms : null,
+    commune: first.code_commune,
+  }
 }
 
 /**
