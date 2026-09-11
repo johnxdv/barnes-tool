@@ -71,6 +71,20 @@ const FETCH_TIMEOUT_MS = 9000
  */
 const MAX_PAR_CATEGORIE = 4
 
+/**
+ * Points portés sur la carte, par catégorie.
+ *
+ * La liste détaillée nomme les quatre plus proches ; la carte, elle, montre
+ * tout ce qui a été relevé — c'est même sa raison d'être : un quartier dense se
+ * reconnaît à la densité de ses points, pas à un décompte. Le plafond ne sert
+ * qu'à borner un centre-ville où les arrêts se comptent par dizaines, au-delà
+ * desquels on ne distingue plus rien.
+ *
+ * Les points sans nom y figurent, contrairement à la liste : sur une carte, un
+ * arrêt de bus anonyme est un arrêt de bus tout de même.
+ */
+const MAX_POINTS_CARTE = 40
+
 // Aucun en-tête d'identification n'est posé ici, et ce n'est pas un oubli.
 // `User-Agent` figure parmi les en-têtes interdits à `fetch` dans un
 // navigateur : le poser ne le poserait pas, il ferait seulement échouer la
@@ -229,9 +243,10 @@ function dedoublonne(lieux) {
 /**
  * Points d'intérêt dans un rayon de 500 m autour du bien, rangés par catégorie.
  *
- * Chaque catégorie porte son décompte, la distance du plus proche, et le détail
+ * Chaque catégorie porte son décompte, la distance du plus proche, le détail
  * des quelques premiers — c'est ce détail qui fait la page : « École maternelle
- * Cap Canaille, 210 m » vaut mieux que « 3 écoles ».
+ * Cap Canaille, 210 m » vaut mieux que « 3 écoles » — et la position de tous,
+ * dont la page tire sa carte.
  *
  * Ne lève jamais hors annulation : une page de commodités vide est une page,
  * une erreur au milieu d'un rapport n'en est pas une.
@@ -239,7 +254,14 @@ function dedoublonne(lieux) {
 export async function fetchPointsInteret(lat, lon, { signal } = {}) {
   const vide = {
     rayonM: POI_RADIUS_M,
-    categories: CATEGORIES.map(({ id, label }) => ({ id, label, total: 0, plusProcheM: null, lieux: [] })),
+    categories: CATEGORIES.map(({ id, label }) => ({
+      id,
+      label,
+      total: 0,
+      plusProcheM: null,
+      lieux: [],
+      points: [],
+    })),
     attribution: OSM_ATTRIBUTION,
     disponible: false,
   }
@@ -272,6 +294,11 @@ export async function fetchPointsInteret(lat, lon, { signal } = {}) {
           nom: element.tags?.name ?? null,
           type: categorie.detail(element.tags ?? {}),
           distanceM: Math.round(distanceM(lat, lon, point.lat, point.lon)),
+          // Les coordonnées sont conservées pour la carte de la page
+          // « commodités » : la liste n'en a que faire, elle n'affiche qu'une
+          // distance, mais un point sans position ne se pose nulle part.
+          lat: point.lat,
+          lon: point.lon,
         }
       })
       .filter(Boolean)
@@ -287,6 +314,9 @@ export async function fetchPointsInteret(lat, lon, { signal } = {}) {
       // Un arrêt de bus sans nom ne mérite pas une ligne à lui : il compte dans
       // le total, il ne figure pas au détail.
       lieux: uniques.filter((lieu) => lieu.nom).slice(0, MAX_PAR_CATEGORIE),
+      // Ce que la carte porte : tout le relevé, nommé ou non, dans la limite
+      // du lisible.
+      points: uniques.slice(0, MAX_POINTS_CARTE),
     }
   })
 

@@ -10,7 +10,7 @@ import { RapportView } from './components/rapport/RapportView'
 // restitue le montant sur sa page « Estimation de valeur ». Le fichier est
 // conservé — c'est le seul écran du parcours à recueillir des coordonnées, et
 // rien ne l'a remplacé sur ce point.
-import { AUCUNE_DETECTION, requestEstimation } from './lib/estimation'
+import { AUCUN_AJUSTEMENT, AUCUNE_DETECTION, requestEstimation } from './lib/estimation'
 import { RAPPORT_VIDE, requestRapport } from './lib/rapport'
 
 /**
@@ -40,10 +40,12 @@ const STAGES = ['adresse', 'batiment', 'analyse', 'caracteristiques', 'assemblag
  *    la surface croise de toute façon la vocation du bâtiment et son
  *    diagnostic énergétique.
  *  - `requestEstimation` **une seconde fois**, à la validation du formulaire,
- *    avec la surface habitable que l'agent vient de déclarer. Le premier
- *    montant reposait sur une surface reconstituée depuis l'emprise au sol et
- *    un nombre de niveaux présumé ; celui-ci repose sur une surface connue, et
- *    c'est lui que le rapport retient. Voir `saveCharacteristics`.
+ *    avec la surface habitable que l'agent vient de déclarer et le reste des
+ *    caractéristiques saisies. Le premier montant reposait sur une surface
+ *    reconstituée depuis l'emprise au sol et un nombre de niveaux présumé, sur
+ *    un bien dont on ne savait ni l'état ni le diagnostic ; celui-ci repose sur
+ *    ce qui a été vu et déclaré, et c'est lui que le rapport retient — avec le
+ *    détail des ajustements appliqués. Voir `saveCharacteristics`.
  *  - `requestRapport` part dans la foulée, une fois le montant définitif connu
  *    et les caractéristiques saisies : les deux lui sont nécessaires, pour le
  *    profil acquéreur et pour les points forts. Il ne peut donc pas être
@@ -71,6 +73,13 @@ export default function App() {
   // condition qui compte : c'est lui qui s'en sert, pour ne pas redemander ce
   // qui est déjà su.
   const [detection, setDetection] = useState(AUCUNE_DETECTION)
+  // Détail des ajustements que les caractéristiques déclarées ont fait jouer
+  // sur le prix — état général, classe énergie, piscine, stationnements. Vide
+  // jusqu'à la validation du formulaire, qui est le premier appel à les
+  // connaître. Le rapport les imprime sous le montant : sans eux, deux biens
+  // voisins estimés à des prix différents n'auraient aucune explication à
+  // présenter au vendeur.
+  const [ajustements, setAjustements] = useState(AUCUN_AJUSTEMENT)
   // Caractéristiques détaillées saisies à l'étape `caracteristiques`. Les
   // champs laissés de côté y valent `null` — à distinguer d'un zéro déclaré au
   // moment de les restituer.
@@ -108,6 +117,7 @@ export default function App() {
       setSelection(confirmedSelection)
       setPrice(null)
       setDetection(AUCUNE_DETECTION)
+      setAjustements(AUCUN_AJUSTEMENT)
       pendingEstimate.current = requestEstimation(confirmedSelection)
       goToStep('analyse')
     },
@@ -143,10 +153,12 @@ export default function App() {
   // On relance donc le moteur avec elle, et c'est ce second montant qui fait
   // foi partout ensuite.
   //
-  // Rien à relancer si l'agent n'a pas touché au curseur : la charge utile
-  // serait identique à celle de l'analyse, et la réponse aussi. Le montant de
-  // l'analyse est alors conservé — la page « estimation de valeur » n'affichera
-  // de toute façon aucun prix au m², faute de surface à laquelle le rapporter.
+  // Le calcul est relancé dans tous les cas, surface déclarée ou non : le
+  // formulaire porte désormais des caractéristiques qui pèsent sur le prix —
+  // état général, classe énergie, piscine, stationnements (voir
+  // `api/_lib/ajustements.js`) —, et la charge utile n'est donc plus jamais
+  // identique à celle de l'analyse. Un curseur de surface laissé au repos
+  // n'empêche plus un état « à rénover » de se voir.
   //
   // L'assemblage du rapport ne pouvait pas être anticipé — il lui faut le
   // montant *et* le formulaire — et il attend maintenant le montant définitif :
@@ -164,13 +176,15 @@ export default function App() {
 
       // `requestEstimation` ne rejette jamais ; un échec rend un montant `null`,
       // qu'on ne laisse pas écraser celui de l'analyse — un rapport avec un
-      // prix approché vaut mieux qu'un rapport sans prix.
-      const recalcule =
-        surfaceM2 == null
-          ? price
-          : ((await requestEstimation({ ...selection, surfaceM2 }))?.price ?? price)
+      // prix approché vaut mieux qu'un rapport sans prix. Les ajustements, eux,
+      // ne survivent pas à l'échec : ils décrivent un montant qui n'a pas été
+      // obtenu, et les afficher sous celui de l'analyse en ferait la
+      // justification d'un calcul qui ne les a jamais appliqués.
+      const estimation = await requestEstimation({ ...selection, surfaceM2, characteristics: values })
+      const recalcule = estimation?.price ?? price
 
       setPrice(recalcule)
+      setAjustements(estimation?.price == null ? AUCUN_AJUSTEMENT : estimation.ajustements)
 
       // `requestRapport` ne rejette jamais : un échec complet rend un rapport
       // vide, dont les pages de secteur s'affichent en attente de saisie.
@@ -187,6 +201,7 @@ export default function App() {
     setSelection(null)
     setPrice(null)
     setDetection(AUCUNE_DETECTION)
+    setAjustements(AUCUN_AJUSTEMENT)
     setCharacteristics(null)
     setRapport(null)
     pendingEstimate.current = null
@@ -281,6 +296,7 @@ export default function App() {
                 address={address}
                 selection={selection}
                 price={price}
+                ajustements={ajustements}
                 characteristics={characteristics}
                 // Un assemblage qui n'aurait pas abouti laisse `rapport` à
                 // `null` ; le rapport vide a la même forme et s'affiche avec ses

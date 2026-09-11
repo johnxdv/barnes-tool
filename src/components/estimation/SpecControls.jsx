@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Minus, Plus, RotateCcw } from 'lucide-react'
+import { ImagePlus, Loader2, Minus, Plus, RotateCcw, X } from 'lucide-react'
+import { MAX_PHOTOS, lirePhotos } from '../../lib/photos'
 
 /**
  * Contrôles du formulaire de caractéristiques.
@@ -807,6 +808,130 @@ export function ToggleField({ label, value, onChange, illustration }) {
           Oui
         </span>
       </div>
+    </FieldCard>
+  )
+}
+
+/**
+ * Photos du bien — le seul champ du formulaire qui ne se règle pas.
+ *
+ * Les clichés sont réduits à l'ajout (voir `src/lib/photos.js`) puis conservés
+ * dans l'état du formulaire comme n'importe quelle autre caractéristique : le
+ * rapport leur consacre une page, et celle-ci disparaît du document quand il
+ * n'y en a aucune. Rien n'est téléversé, rien ne quitte l'onglet.
+ *
+ * `value` est une liste, jamais `null` — c'est la seule entorse à la règle de
+ * l'écran, et elle se justifie : une liste vide ne prétend rien. Personne ne
+ * lira « aucune photo » comme une déclaration sur le bien, là où un « 0 » sur
+ * le compteur des chambres en serait une.
+ */
+export function PhotosField({ label, value, onChange }) {
+  const photos = Array.isArray(value) ? value : []
+  const restant = MAX_PHOTOS - photos.length
+  const inputRef = useRef(null)
+  const [chargement, setChargement] = useState(false)
+  const reduce = useReducedMotion()
+
+  const ajouter = async (fichiers) => {
+    if (!fichiers?.length || restant <= 0) return
+
+    setChargement(true)
+    try {
+      const nouvelles = await lirePhotos(fichiers, { restant })
+      if (nouvelles.length > 0) onChange([...photos, ...nouvelles])
+    } finally {
+      setChargement(false)
+      // Sans cela, redéposer le même fichier après l'avoir retiré ne
+      // déclencherait aucun `change` — la valeur de l'input n'aurait pas varié.
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  return (
+    <FieldCard
+      label={label}
+      value={photos.length > 1 ? `${photos.length} photos` : '1 photo'}
+      filled={photos.length > 0}
+      onReset={() => onChange([])}
+    >
+      {photos.length > 0 ? (
+        <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          <AnimatePresence initial={false}>
+            {photos.map((photo) => (
+              <motion.li
+                key={photo.id}
+                layout={!reduce}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.18 }}
+                className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-ink/10 bg-stone"
+              >
+                <img
+                  src={photo.src}
+                  alt={photo.nom || 'Photo du bien'}
+                  className="h-full w-full object-cover"
+                />
+                <motion.button
+                  type="button"
+                  onClick={() => onChange(photos.filter((autre) => autre.id !== photo.id))}
+                  aria-label={`Retirer la photo${photo.nom ? ` ${photo.nom}` : ''}`}
+                  title="Retirer"
+                  whileTap={{ scale: 0.85 }}
+                  transition={TAP}
+                  className="absolute right-1 top-1 flex h-6 w-6 touch-manipulation items-center justify-center rounded-full bg-ink/70 text-white backdrop-blur-sm transition-colors hover:bg-ink"
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden="true" />
+                </motion.button>
+              </motion.li>
+            ))}
+          </AnimatePresence>
+        </ul>
+      ) : null}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="sr-only"
+        onChange={(event) => ajouter(event.target.files)}
+      />
+
+      <motion.button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={restant <= 0 || chargement}
+        whileTap={{ scale: restant > 0 ? 0.98 : 1 }}
+        transition={TAP}
+        className={[
+          'mt-3 flex w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-4 font-mono text-[0.58rem] uppercase tracking-micro transition-colors duration-300 ease-plan',
+          restant <= 0
+            ? 'cursor-not-allowed border-ink/10 text-ink/25'
+            : 'border-ink/20 text-ink/45 hover:border-[color:var(--accent)] hover:bg-[color:var(--accent-tint)] hover:text-[color:var(--accent)]',
+        ].join(' ')}
+      >
+        {chargement ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} aria-hidden="true" />
+            Préparation des clichés
+          </>
+        ) : (
+          <>
+            <ImagePlus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            {restant <= 0
+              ? `Maximum atteint — ${MAX_PHOTOS} photos`
+              : photos.length === 0
+                ? 'Ajouter des photos'
+                : `Ajouter — ${restant} restantes`}
+          </>
+        )}
+      </motion.button>
+
+      <p className="mt-2 text-center text-[0.68rem] leading-snug text-ink/40">
+        Les photos restent sur cet appareil et ne servent qu’au rapport, où elles
+        occupent une page dédiée. Sans photo, la page n’est pas imprimée.
+      </p>
     </FieldCard>
   )
 }

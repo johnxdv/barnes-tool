@@ -21,6 +21,7 @@ import {
   DpeField,
   DualStepperField,
   NumberField,
+  PhotosField,
   SegmentedField,
   SliderField,
   StepperField,
@@ -50,6 +51,11 @@ import {
  * Une seule carte va et vient, l'étage : elle n'a de sens qu'en appartement, et
  * le type de bien la fait naître ou disparaître, qu'il ait été choisi sur ces
  * boutons ou repris de la détection.
+ *
+ * Un champ échappe à la règle du `null`, et c'est le dernier de l'écran : les
+ * photos du bien, qui valent liste vide. Elles sont réduites à l'ajout et ne
+ * quittent jamais l'appareil ; le rapport leur consacre une page, qu'il
+ * n'imprime pas s'il n'y en a aucune (voir `src/lib/photos.js`).
  *
  * Chaque champ chiffré a son curseur ou son compteur, et son illustration
  * propre (`SpecIllustrations`) : le terrain s'étend, l'immeuble monte, la
@@ -184,6 +190,10 @@ const VALEURS_VIDES = {
   piscine: null,
   stationnementsExterieurs: null,
   stationnementsInterieurs: null,
+  // Seul champ à ne pas valoir `null` au départ : une liste vide de photos ne
+  // prétend rien sur le bien, là où un `0` sur un compteur serait une
+  // déclaration. Voir `PhotosField`.
+  photos: [],
 }
 
 const nombreFr = new Intl.NumberFormat('fr-FR')
@@ -490,8 +500,39 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
           </Colonne>
         </div>
 
+        {/* Les photos tiennent toute la largeur, sous les deux colonnes : une
+            grille de vignettes enfermée dans une demi-colonne ne montrerait
+            plus rien, et le champ n'appartient de toute façon ni au bien ni au
+            bâti — il les regarde tous les deux. Les variables de couleur sont
+            celles de la colonne « Votre bien », dont il prolonge le propos. */}
+        <section
+          style={{
+            '--accent': COLONNES.bien.accent,
+            '--accent-from': COLONNES.bien.from,
+            '--accent-tint': COLONNES.bien.tint,
+            animationDelay: '0.3s',
+          }}
+          className="animate-fade-up mt-5 rounded-2xl border border-ink/10 bg-stone/40 p-3 sm:p-4 lg:mt-6"
+        >
+          <header className="mb-3 flex items-center gap-2.5 px-1">
+            <span
+              aria-hidden="true"
+              className="h-6 w-1 shrink-0 rounded-full bg-[color:var(--accent)]"
+            />
+            <h2 className="font-mono text-[0.66rem] uppercase tracking-micro text-[color:var(--accent)]">
+              Photos du bien
+            </h2>
+          </header>
+
+          <PhotosField
+            label="Photos du bien"
+            value={values.photos}
+            onChange={set('photos')}
+          />
+        </section>
+
         <div
-          style={{ animationDelay: '0.35s' }}
+          style={{ animationDelay: '0.4s' }}
           className="animate-fade-up relative mx-auto mt-8 max-w-[19rem]"
         >
           <GoldFrame className="-inset-[2px] rounded-[0.87rem]" />

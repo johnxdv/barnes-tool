@@ -13,13 +13,21 @@
 //   A. Caractéristiques du bien      → `_lib/bien.js`      (BDNB, cadastre)
 //   B. Ventes comparables            → `_lib/comparables.js` (DVF / Etalab)
 //   C. Médiane au m² × surface       → ci-dessous
-//   D. Replis successifs             → `_lib/reference.js`
+//   D. Ajustements du formulaire     → `_lib/ajustements.js`
+//   E. Replis successifs             → `_lib/reference.js`
+//
+// L'étape D n'existe qu'au second appel. Le moteur est sollicité deux fois par
+// parcours : une première fois pendant l'analyse, sur ce que les bases savent
+// du bâtiment, une seconde à la validation du formulaire, avec la surface
+// déclarée *et* les caractéristiques saisies. Seul ce second montant fait foi
+// au rapport (voir `saveCharacteristics` dans `src/App.jsx`).
 //
 // Aucune de ces étapes ne peut faire échouer la réponse : chacune a son repli,
 // et le parcours utilisateur ne doit jamais s'interrompre sur une donnée
 // manquante. Toutes les sources sont des services publics ouverts — aucune clé
 // d'API n'est nécessaire, et aucune ne transiterait par le front de toute façon.
 
+import { ajustementsPrix } from './_lib/ajustements.js'
 import { describeBien } from './_lib/bien.js'
 import { departementPricePerM2, findComparables } from './_lib/comparables.js'
 import { communeAtPoint, departementFromInsee } from './_lib/geo.js'
@@ -94,6 +102,27 @@ function detectionUtile({ type, confiance, classeEnergie }) {
     classeEnergie: { value: classeEnergie ?? null, detected: Boolean(classeEnergie) },
   }
 }
+
+/**
+ * Caractéristiques transmises par le formulaire, ou objet vide.
+ *
+ * Absentes du premier appel — l'analyse précède le formulaire —, présentes au
+ * second. Les photos du bien, elles, n'arrivent jamais jusqu'ici : le front les
+ * retire de la charge utile (voir `sansPhotos` dans `src/lib/estimation.js`),
+ * elles ne pèsent sur aucun calcul et se compteraient en mégaoctets.
+ */
+const lireCaracteristiques = (valeur) =>
+  valeur && typeof valeur === 'object' && !Array.isArray(valeur) ? valeur : {}
+
+/**
+ * Ajustements sous une forme lisible dans un journal : « +5 % » plutôt que
+ * « 0.05 », et la ligne de total à côté du détail.
+ */
+const traceAjustements = ({ coefficient, brut, plafonne, details }) => ({
+  total: `${(coefficient * 100).toFixed(1)} %`,
+  ...(plafonne ? { avantPlafond: `${(brut * 100).toFixed(1)} %` } : {}),
+  detail: details.map((d) => `${d.id} ${d.coefficient > 0 ? '+' : ''}${(d.coefficient * 100).toFixed(1)} %`),
+})
 
 /** Bornes du montant renvoyé — au-delà, le calcul relève de la donnée aberrante. */
 const PRICE_RANGE = [15000, 20000000]
@@ -183,12 +212,18 @@ export default async function handler(req, res) {
     const declaree = surfaceDeclaree(body.surfaceM2)
     const surfaceM2 = declaree ?? SURFACE_PAR_DEFAUT[type]
 
+    // Les caractéristiques déclarées ajustent le barème monégasque comme elles
+    // ajustent la médiane française : un bien à rénover se négocie partout,
+    // et le prix au m² de référence décrit ici aussi un bien moyen.
+    const ajustements = ajustementsPrix(lireCaracteristiques(body.characteristics))
+
     // Pas de bornage ici, contrairement au calcul français : les deux facteurs
     // sont déjà bornés — la surface par le curseur (10 à 800 m²), le prix au m²
     // par une constante. Le produit tient de lui-même entre 575 000 € et 46 M€,
     // et le plafond français (20 M€) écrêterait une villa monégasque de grande
-    // surface sur un montant qui, lui, n'a rien d'aberrant.
-    const price = round(MONACO_PRICE_PER_M2 * surfaceM2)
+    // surface sur un montant qui, lui, n'a rien d'aberrant. L'ajustement est
+    // lui-même plafonné à ±15 %, il ne peut pas en sortir.
+    const price = round(MONACO_PRICE_PER_M2 * surfaceM2 * (1 + ajustements.coefficient))
 
     const meta = {
       type,
@@ -196,6 +231,7 @@ export default async function handler(req, res) {
       surfaceSource: declaree ? 'declaree' : 'defaut',
       pricePerM2: MONACO_PRICE_PER_M2,
       source: 'monaco-imsee',
+      ajustements: traceAjustements(ajustements),
     }
 
     console.log('[estimation]', JSON.stringify(meta))
@@ -214,6 +250,7 @@ export default async function handler(req, res) {
         confiance: body.typeConfiance,
         classeEnergie: null,
       }),
+      ajustements,
       ...(process.env.ESTIMATION_DEBUG ? { meta } : {}),
     })
   }
@@ -226,6 +263,8 @@ export default async function handler(req, res) {
   const budget = setTimeout(() => controller.abort(), BUDGET_MS)
   const signal = controller.signal
   const startedAt = Date.now()
+
+  const characteristics = lireCaracteristiques(body.characteristics)
 
   try {
     // Le type est normalement détecté côté carte et transmis tel quel ; on ne
@@ -297,7 +336,13 @@ export default async function handler(req, res) {
     const surfaceM2 =
       selection.surfaceM2 ?? bien.surfaceM2 ?? SURFACE_PAR_DEFAUT[type] ?? SURFACE_PAR_DEFAUT.maison
 
-    const raw = prix.pricePerM2 * surfaceM2
+    // Le produit médiane × surface décrit le bien moyen du secteur ; les
+    // caractéristiques déclarées l'en écartent, modérément et sous plafond
+    // (voir `_lib/ajustements.js`). Nul au premier appel, qui ne connaît pas
+    // encore le formulaire.
+    const ajustements = ajustementsPrix(characteristics)
+
+    const raw = prix.pricePerM2 * surfaceM2 * (1 + ajustements.coefficient)
     const price = clampPrice(round(raw))
 
     const meta = {
@@ -316,6 +361,11 @@ export default async function handler(req, res) {
       source: prix.source,
       comparables: prix.count,
       radiusM: prix.radiusM ?? null,
+      // Le détail des ajustements appliqués, ligne à ligne : c'est par lui que
+      // l'on vérifie qu'un prix sorti différent de son voisin l'est pour une
+      // raison qu'on peut nommer.
+      ajustements: traceAjustements(ajustements),
+      prixAvantAjustements: Math.round(prix.pricePerM2 * surfaceM2),
       elapsedMs: Date.now() - startedAt,
     }
 
@@ -329,6 +379,10 @@ export default async function handler(req, res) {
       ok: true,
       price,
       detection: detectionUtile({ type, confiance, classeEnergie: bien.classeEnergie }),
+      // Ce bloc-ci descend toujours, à la différence de `meta` : le rapport
+      // affiche le détail des ajustements sous le montant, et un prix qu'on ne
+      // sait pas décomposer est un prix que l'agent ne peut pas défendre.
+      ajustements,
       ...(process.env.ESTIMATION_DEBUG ? { meta } : {}),
     })
   } catch (error) {

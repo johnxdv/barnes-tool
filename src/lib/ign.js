@@ -22,6 +22,29 @@ export const ORTHO_TILE_URL =
  */
 export const ORTHO_MAX_NATIVE_ZOOM = 19
 
+/**
+ * Plan IGN v2 — le fond cartographique dessiné, par opposition à la
+ * photographie.
+ *
+ * Il sert la carte des commodités du rapport, et lui seul convient : sur une
+ * orthophoto, une pastille de couleur posée sur des toitures et de la
+ * végétation ne se rattache à rien. Le plan, lui, montre les rues et leurs
+ * noms — c'est ce qui permet de lire « l'école est de l'autre côté du
+ * boulevard » plutôt que « l'école est à 210 m ».
+ *
+ * Même service, même licence ouverte, même pyramide Web Mercator que
+ * l'orthophoto ci-dessus : aucune clé, et des indices de tuiles directement
+ * utilisables par Leaflet.
+ */
+export const PLAN_TILE_URL =
+  'https://data.geopf.fr/wmts' +
+  '?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
+  '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png' +
+  '&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}'
+
+/** Dernier niveau dessiné du Plan IGN v2. */
+export const PLAN_MAX_NATIVE_ZOOM = 19
+
 // --- Vue aérienne figée ----------------------------------------------------
 
 const WMS_ENDPOINT = 'https://data.geopf.fr/wms-r/wms'

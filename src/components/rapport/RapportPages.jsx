@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { Minus, Plus, RotateCcw, TrendingDown, TrendingUp } from 'lucide-react'
 import { ChampModifiable, OutilLigne, useEdition } from './Edition'
 import {
@@ -12,7 +13,7 @@ import {
 import { Barres, Courbe, Repartition } from './RapportCharts'
 
 /**
- * Les onze pages de l'avis de valeur.
+ * Les pages de l'avis de valeur.
  *
  * Chacune reçoit sa part du modèle d'affichage (`rapportModele.js`) et ne fait
  * que la disposer : aucun calcul, aucun formatage, aucune décision sur ce qui
@@ -25,7 +26,30 @@ import { Barres, Courbe, Repartition } from './RapportCharts'
  * à la main ce que les bases n'ont pas su fournir. Un rapport dont la
  * pagination change selon la commune n'est pas un document, c'est une sortie
  * de programme.
+ *
+ * Une seule page y échappe, `PagePhotos`, et l'exception dit la règle : les
+ * autres pages attendent d'une source qu'elle réponde, celle-là attend de
+ * l'agent qu'il ait photographié le bien. Une page « marché » vide indique un
+ * travail à faire ; une page de photographies vide ne serait qu'une feuille
+ * blanche dans un document remis au vendeur. Elle est donc omise, et c'est
+ * `RapportView` qui en décide — voir la sélection des pages à l'export.
  */
+
+/**
+ * La carte des commodités est chargée à part.
+ *
+ * Elle est le seul morceau du rapport à dépendre de Leaflet, et l'importer
+ * directement ferait entrer la librairie dans le paquet principal — soit une
+ * centaine de kilooctets à télécharger avant même l'écran d'adresse, pour une
+ * page que le parcours n'atteint qu'à la fin. Le repérage du bâtiment suit déjà
+ * cette règle (`EstimationBuildingStep`), et les deux se partagent alors le
+ * même morceau : la librairie est en cache bien avant que le rapport s'ouvre —
+ * le parcours passe par la carte de repérage, et `App` l'amorce dès la saisie
+ * de l'adresse.
+ */
+const CarteCommodites = lazy(() =>
+  import('./CarteCommodites').then((module) => ({ default: module.CarteCommodites })),
+)
 
 /** Flèche d'évolution — jamais seule, toujours accolée au pourcentage. */
 function Tendance({ sens, className = 'h-3.5 w-3.5' }) {
@@ -274,6 +298,63 @@ export function PageDescription({ description, numero }) {
   )
 }
 
+// --- Photos du bien --------------------------------------------------------
+
+/**
+ * Les clichés déposés au formulaire, en planche.
+ *
+ * La seule page du rapport à disparaître quand elle n'a rien à montrer : c'est
+ * `RapportView` qui l'écarte, sur la foi du modèle qui rend `null` faute de
+ * photo (voir `photos` dans `rapportModele.js`). Elle ne porte donc jamais de
+ * bloc « indisponible ».
+ *
+ * Deux colonnes, et la première photo sur toute la largeur : la planche
+ * uniforme donnait à chaque cliché le même poids, alors que le premier déposé
+ * est presque toujours la façade — celui qu'on regarde avant les autres. Les
+ * clichés en hauteur sont contenus plutôt que recadrés (`object-contain`) :
+ * couper un intérieur pour le faire tenir dans un cadre paysage revient à en
+ * retirer le plafond et le sol.
+ */
+export function PagePhotos({ photos, numero }) {
+  const [ouverture, ...suite] = photos
+
+  return (
+    <PageRapport numero={numero} surtitre="Le bien" titre="Photos du bien">
+      <figure className="m-0">
+        <img
+          src={ouverture.src}
+          alt={ouverture.nom || 'Photo du bien'}
+          className={`w-full rounded-lg border border-marine/10 bg-marine/[0.03] ${
+            ouverture.portrait ? 'object-contain' : 'object-cover'
+          }`}
+          style={{ aspectRatio: '16 / 9' }}
+        />
+      </figure>
+
+      {suite.length > 0 ? (
+        <ul className="mt-3 grid grid-cols-2 gap-3">
+          {suite.map((photo) => (
+            <li key={photo.cle} className="m-0">
+              <img
+                src={photo.src}
+                alt={photo.nom || 'Photo du bien'}
+                className={`w-full rounded-lg border border-marine/10 bg-marine/[0.03] ${
+                  photo.portrait ? 'object-contain' : 'object-cover'
+                }`}
+                style={{ aspectRatio: '4 / 3' }}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <p className="mt-auto pt-5 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
+        {photos.length > 1 ? `${photos.length} clichés du bien` : 'Cliché du bien'} — pris sur place
+      </p>
+    </PageRapport>
+  )
+}
+
 // --- 4. Points d'intérêt ---------------------------------------------------
 
 export function PageCommodites({ commodites, numero }) {
@@ -291,7 +372,29 @@ export function PageCommodites({ commodites, numero }) {
             l’ordre de grandeur de ce qui se fait à pied.
           </p>
 
-          <div className="mt-6 space-y-6">
+          {/* La carte d'abord : elle donne la forme du quartier, que les
+              décomptes détaillent ensuite. Absente quand le relevé n'a rien
+              rapporté — un fond de plan sans un point ne dirait rien. */}
+          {commodites.carte ? (
+            <div className="mt-4">
+              {/* Le repli tient la hauteur exacte de la carte : sans lui, les
+                  sections du dessous remonteraient le temps du chargement puis
+                  redescendraient, et l'agent verrait sa page se réorganiser
+                  sous les yeux. */}
+              <Suspense
+                fallback={
+                  <div
+                    className="rapport-carte w-full rounded-lg border border-marine/12 bg-marine/[0.03]"
+                    style={{ height: '250px' }}
+                  />
+                }
+              >
+                <CarteCommodites carte={commodites.carte} />
+              </Suspense>
+            </div>
+          ) : null}
+
+          <div className="mt-5 space-y-4">
             {commodites.categories.map((categorie) => (
               <Section
                 key={categorie.id}
@@ -335,7 +438,7 @@ export function PageCommodites({ commodites, numero }) {
             ))}
           </div>
 
-          <p className="mt-auto pt-5 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
+          <p className="mt-auto pt-4 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
             Source : {commodites.attribution}
           </p>
         </>
@@ -767,6 +870,40 @@ export function PageEstimation({ estimation, marche, numero }) {
             <Statistique cle="estimation.haut" label="Fourchette haute" valeur={estimation.haut} accent />
           </div>
 
+          {/* Ce qui a écarté le montant de la médiane du secteur, ligne à
+              ligne. La section n'apparaît que s'il y a quelque chose à
+              montrer : un formulaire qui n'a rien déclaré de déterminant ne
+              produit aucun ajustement, et un tableau vide se lirait comme un
+              relevé manquant.
+
+              Ces lignes sont dans le rapport pour une raison précise : un
+              vendeur à qui l'on annonce une décote a le droit de savoir
+              laquelle, et l'agent qui la lui présente doit pouvoir la défendre
+              sans deviner d'où elle sort. */}
+          {estimation.ajustements.length > 0 ? (
+            <Section
+              titre="Ajustements appliqués"
+              aparte={estimation.ajustementTotal ? `total : ${estimation.ajustementTotal}` : null}
+              className="mt-6"
+            >
+              <ListeChamps
+                champs={estimation.ajustements.map((ajustement) => ({
+                  id: ajustement.cle,
+                  label: ajustement.label,
+                  valeur: ajustement.valeur,
+                }))}
+                colonnes={2}
+              />
+              <p className="mt-2.5 text-[0.7rem] leading-relaxed text-marine/45">
+                Appliqués à la valeur tirée des ventes comparables, qui décrit un bien moyen du
+                secteur. Chaque ajustement est plafonné, et leur cumul aussi
+                {estimation.ajustementPlafonne
+                  ? ' — c’est ce plafond qui explique que le total ne fasse pas la somme des lignes.'
+                  : '.'}
+              </p>
+            </Section>
+          ) : null}
+
           <Section titre="Synthèse" className="mt-7">
             <ChampModifiable
               cle="estimation.synthese"
@@ -857,6 +994,83 @@ export function PageAcquereur({ acquereur, numero }) {
           </p>
         </>
       )}
+    </PageRapport>
+  )
+}
+
+// --- Notre agence ----------------------------------------------------------
+
+/**
+ * La page de fin — qui a établi cet avis de valeur, et comment le joindre.
+ *
+ * Ces informations ne viennent d'aucune source et ne se calculent pas : elles
+ * sont celles de l'agence, posées une fois pour toutes hors du code (voir
+ * `src/config/agence.js`) et modifiables à l'écran comme le reste du rapport.
+ * Un champ non configuré s'affiche « Non renseigné » plutôt que d'être omis :
+ * c'est ce qui rappelle à l'agent, avant impression, qu'il manque un numéro de
+ * téléphone sur un document qui porte son nom.
+ */
+export function PageAgence({ agence, numero }) {
+  return (
+    <PageRapport numero={numero} surtitre="Votre interlocuteur" titre="Notre agence">
+      {/* Les espacements de cette page sont volontairement plus serrés que
+          ceux de ses voisines : les mentions légales du pied sont libres, et
+          trois lignes de carte professionnelle ne doivent pas faire déborder la
+          feuille. */}
+      <div className="rounded-xl border border-marine/12 bg-marine/[0.03] px-6 py-6">
+        <ChampModifiable
+          cle="agence.enseigne"
+          valeur={agence.enseigne}
+          as="p"
+          className="block font-mono text-[0.7rem] uppercase tracking-[0.42em] text-corail"
+        />
+        <span aria-hidden="true" className="mt-4 block h-px w-16 bg-corail/40" />
+        <ChampModifiable
+          cle="agence.nom"
+          valeur={agence.nom}
+          as="p"
+          className="mt-4 block font-display text-[1.6rem] font-semibold leading-tight text-marine"
+        />
+        <ChampModifiable
+          cle="agence.baseline"
+          valeur={agence.baseline}
+          as="p"
+          className="mt-1.5 block text-[0.85rem] leading-relaxed text-marine/55"
+        />
+      </div>
+
+      <Section titre="Coordonnées" className="mt-6">
+        <ListeChamps champs={agence.coordonnees} />
+      </Section>
+
+      <Section titre="Votre conseiller" className="mt-6">
+        <ListeChamps champs={agence.conseiller} />
+      </Section>
+
+      <Section titre="Les prochaines étapes" className="mt-6">
+        <ChampModifiable
+          cle="agence.suite"
+          valeur="Cet avis de valeur constitue le point de départ de la commercialisation. Nous vous proposons d’en reprendre ensemble les hypothèses, d’arrêter un prix de présentation et de convenir des modalités de diffusion et de visite."
+          as="p"
+          multiligne
+          className="block text-[0.85rem] leading-relaxed text-marine/70"
+        />
+      </Section>
+
+      <div className="mt-auto pt-6">
+        <ChampModifiable
+          cle="agence.mentions"
+          valeur={agence.mentionsLegales}
+          as="p"
+          multiligne
+          placeholder="Mentions légales de l’agence — carte professionnelle, RCS, garant financier."
+          className="block text-[0.66rem] leading-relaxed text-marine/40"
+        />
+        <p className="mt-3 rounded-lg border border-corail/25 bg-corail/[0.05] px-4 py-3 text-[0.72rem] leading-relaxed text-marine/60">
+          Document établi à titre d’information. Il ne vaut ni mandat, ni expertise judiciaire, ni
+          engagement sur le prix de vente définitif.
+        </p>
+      </div>
     </PageRapport>
   )
 }

@@ -251,6 +251,18 @@
     text-decoration: line-through;
     text-decoration-color: theme('colors.corail');
   }
+
+  /* Page décochée à l'export — même parti pris qu'une ligne masquée, à
+     l'échelle de la feuille : elle reste là, visiblement mise de côté, et se
+     rétablit d'une case recochée. Le désaturé fait le gros du travail (une
+     couverture bleu marine ne se distingue pas par la seule opacité) ; le
+     `pointer-events` évite qu'on corrige à l'aveugle un champ d'une page qu'on
+     n'imprimera pas. */
+  .rapport-exclue {
+    @apply opacity-40;
+    filter: grayscale(1);
+    pointer-events: none;
+  }
 }
 
 @media print {
@@ -297,6 +309,30 @@
     margin: 0 !important;
   }
 
+  /* Enveloppe d'une feuille : elle porte la coupe, et la page porte son
+     contenu. La séparation compte — c'est elle qui permet d'écarter une page de
+     l'export sans dérégler la pagination des autres.
+
+     La coupe est posée *avant* chaque feuille plutôt qu'après : une page
+     décochée ne produit aucune boîte (`display: none`), et une coupe posée
+     après la dernière feuille visible ferait sortir une feuille blanche de
+     plus. Placée avant, elle n'a rien à couper au début du document — les
+     navigateurs ignorent une coupe forcée en tête de flux — et il n'y en a
+     jamais après la fin. */
+  .rapport-feuille {
+    display: block !important;
+    break-before: page;
+  }
+
+  .rapport-feuille:first-child {
+    break-before: auto;
+  }
+
+  /* Page décochée à l'export : grisée à l'écran, absente du papier. */
+  .rapport-exclue {
+    display: none !important;
+  }
+
   .rapport-page {
     width: 210mm;
     min-height: 297mm;
@@ -305,16 +341,10 @@
     padding: 14mm 16mm;
     border-radius: 0;
     box-shadow: none !important;
-    /* Une page de rapport = une page de papier. `break-after` coupe après
-       chacune ; `break-inside: avoid` empêche le navigateur de scinder une
-       feuille en deux au milieu d'un tableau. */
-    break-after: page;
+    /* `break-inside: avoid` empêche le navigateur de scinder une feuille en
+       deux au milieu d'un tableau. La coupe entre feuilles, elle, est posée par
+       l'enveloppe ci-dessus. */
     break-inside: avoid;
-  }
-
-  /* Sans quoi la dernière feuille entraîne une page blanche supplémentaire. */
-  .rapport-page:last-child {
-    break-after: auto;
   }
 
   /* Les aplats de couleur — couverture bleu marine, filets, cartes teintées —
@@ -346,6 +376,22 @@
   figure,
   img {
     break-inside: avoid;
+  }
+
+  /* La carte des commodités, en millimètres plutôt qu'en pixels : c'est la
+     seule façon d'obtenir sur la feuille la hauteur qu'on a réglée à l'écran.
+     Leaflet, lui, recompose son cadrage au basculement vers l'impression (voir
+     `CarteCommodites`) — il ne saurait pas le faire seul, ses dalles étant
+     positionnées pour la largeur d'écran. */
+  .rapport-carte {
+    height: 66mm !important;
+  }
+
+  /* Les dalles de la carte sont des images posées en absolu : sans cela, le
+     navigateur cherche à ne pas les couper et pousse la carte entière — donc la
+     page — sur la feuille suivante. */
+  .rapport-carte img {
+    break-inside: auto;
   }
 }
 

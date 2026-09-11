@@ -16,6 +16,7 @@
 // travaille pas pendant qu'Overpass répond, et l'assemblage ne dure pas plus
 // longtemps qu'avant.
 
+import { sansPhotos } from './photos.js'
 import { fetchPointsInteret } from './poi.js'
 
 const ENDPOINT = '/api/rapport'
@@ -73,8 +74,10 @@ export async function requestRapport({ selection, address, price, characteristic
     commune: selection?.parcelle?.commune ?? address?.city ?? null,
     price: price ?? null,
     // Le formulaire au complet — c'est de lui que sortent les points forts et
-    // les points de réserve suggérés.
-    characteristics: characteristics ?? null,
+    // les points de réserve suggérés. Aux photos près : le serveur n'en fait
+    // rien, et quelques mégaoctets de `data:` URL sur la requête suffiraient à
+    // la faire refuser.
+    characteristics: sansPhotos(characteristics ?? null),
   }
 
   // Les deux moitiés en parallèle. `fetchPointsInteret` ne lève pas hors

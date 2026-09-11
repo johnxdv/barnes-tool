@@ -4,6 +4,8 @@
 // caractéristiques que les bases connaissaient déjà. Ni les sources de
 // données, ni la méthode, ni les éventuels replis ne descendent jusqu'ici.
 
+import { sansPhotos } from './photos.js'
+
 const ENDPOINT = '/api/estimation'
 
 /**
@@ -27,14 +29,27 @@ export const AUCUNE_DETECTION = {
  */
 const TIMEOUT_MS = 15000
 
+/**
+ * Ajustements appliqués, quand il n'y en a aucun — forme identique à celle
+ * d'une réponse qui en porte, pour que le rapport n'ait jamais à vérifier
+ * l'existence de l'objet, seulement la longueur de sa liste.
+ */
+export const AUCUN_AJUSTEMENT = { coefficient: 0, plafonne: false, details: [] }
+
 /** Réponse rendue quand rien n'a pu être obtenu — même forme que les autres. */
-const echec = () => ({ price: null, detection: AUCUNE_DETECTION })
+const echec = () => ({
+  price: null,
+  detection: AUCUNE_DETECTION,
+  ajustements: AUCUN_AJUSTEMENT,
+})
 
 /**
  * Demande l'estimation d'une sélection confirmée sur la carte.
  *
- * Renvoie `{ price, detection }` : le montant, et ce que les bases savaient
- * déjà du bien. Les deux viennent du même aller-retour, celui qui court
+ * Renvoie `{ price, detection, ajustements }` : le montant, ce que les bases
+ * savaient déjà du bien, et le détail des ajustements que les caractéristiques
+ * déclarées ont fait jouer sur le prix — vide tant que le formulaire n'a pas
+ * été rempli. Les deux premiers viennent du même aller-retour, celui qui court
  * derrière l'écran d'analyse — la chaîne cadastre → BDNB qu'il déroule pour
  * reconstituer la surface passe de toute façon devant la vocation du bâtiment
  * et son diagnostic énergétique ; les rapporter ne coûte rien de plus.
@@ -92,6 +107,12 @@ export async function requestEstimation(selection) {
     // lancement de l'analyse — plus rien n'est demandé avant elle, la surface
     // ne se règle qu'ensuite, au formulaire de caractéristiques.
     surfaceM2: selection.surfaceM2 ?? null,
+    // Le formulaire de caractéristiques, quand il a été rempli — absent au
+    // premier appel, qui le précède. Le serveur en tire les ajustements de prix
+    // (état général, classe énergie, piscine, stationnements ; voir
+    // `api/_lib/ajustements.js`). Les photos en sont retirées : aucun calcul ne
+    // les regarde, et elles se compteraient en mégaoctets sur la requête.
+    characteristics: sansPhotos(selection.characteristics ?? null),
     // Parcelle cadastrale et fiche BDNB ont déjà été obtenues pour déterminer
     // le type du bien, au moment du clic sur la carte. Les retransmettre évite
     // au serveur de refaire la même chaîne d'appels — deux à trois secondes qui
@@ -129,16 +150,18 @@ export async function requestEstimation(selection) {
     const data = await response.json().catch(() => null)
     const price = Number(data?.price)
     const detection = lireDetection(data?.detection)
+    const ajustements = lireAjustements(data?.ajustements)
 
     if (!Number.isFinite(price) || price <= 0) {
       console.error('[estimation] Réponse sans montant exploitable —', data)
       // La détection est tout de même conservée : rien ne lie les deux, et un
       // montant manquant n'est pas une raison de redemander à l'agent ce que
-      // les bases ont su dire du bien.
-      return { price: null, detection }
+      // les bases ont su dire du bien. Les ajustements, eux, ne survivent pas à
+      // l'absence du montant sur lequel ils portaient.
+      return { price: null, detection, ajustements: AUCUN_AJUSTEMENT }
     }
 
-    return { price, detection }
+    return { price, detection, ajustements }
   } catch (error) {
     console.error('[estimation] Appel au moteur en échec —', error)
     return echec()
@@ -170,4 +193,32 @@ function lireDetection(detection) {
     typeBien: champ(detection?.typeBien, TYPES_FORMULAIRE),
     classeEnergie: champ(detection?.classeEnergie, CLASSES_DPE),
   }
+}
+
+/**
+ * Relit le détail des ajustements avant de le laisser entrer dans le rapport.
+ *
+ * Même précaution que pour la détection, et pour la même raison : ces lignes
+ * finissent imprimées sous le montant, avec l'en-tête de l'agence. Une entrée
+ * mal formée y passerait pour un ajustement réellement appliqué. Tout ce qui
+ * n'a ni libellé lisible ni coefficient fini est écarté.
+ */
+function lireAjustements(ajustements) {
+  const coefficient = Number(ajustements?.coefficient)
+  if (!Number.isFinite(coefficient)) return AUCUN_AJUSTEMENT
+
+  const details = (Array.isArray(ajustements?.details) ? ajustements.details : [])
+    .filter(
+      (detail) =>
+        typeof detail?.id === 'string' &&
+        typeof detail?.label === 'string' &&
+        Number.isFinite(Number(detail?.coefficient)),
+    )
+    .map((detail) => ({
+      id: detail.id,
+      label: detail.label,
+      coefficient: Number(detail.coefficient),
+    }))
+
+  return { coefficient, plafonne: ajustements?.plafonne === true, details }
 }

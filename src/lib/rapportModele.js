@@ -31,6 +31,7 @@ import {
 } from './format.js'
 import { orthoImageUrl } from './ign.js'
 import { MONACO_RANGE_PCT } from './monaco.js'
+import { AGENCE } from '../config/agence.js'
 
 /** Champ affiché : couple libellé / valeur, et la clé qui permet de le corriger. */
 const champ = (id, label, valeur) => ({ id, label, valeur: valeur ?? null })
@@ -128,14 +129,55 @@ function points(suggestions) {
   }
 }
 
-/** Points d'intérêt, par catégorie, avec le détail de chacun. */
-function commodites(poi) {
+/**
+ * Points d'intérêt, par catégorie, avec le détail de chacun — et la carte qui
+ * les situe.
+ *
+ * Les deux restitutions viennent du même relevé et ne se recoupent pas : la
+ * liste nomme les plus proches et les chiffre, la carte montre leur
+ * répartition. Un quartier dont tous les commerces sont du même côté d'une voie
+ * ferrée n'a pas le même agrément qu'un quartier où ils encerclent le bien, et
+ * aucune liste de distances ne le dit.
+ */
+function commodites(poi, { lat, lon }) {
   if (!poi) return null
+
+  // Le centre de la carte est le bien lui-même — le même point que celui
+  // interrogé chez Overpass, faute de quoi les distances de la liste ne
+  // correspondraient plus aux positions portées à la carte.
+  const carte =
+    Number.isFinite(lat) && Number.isFinite(lon)
+      ? {
+          lat,
+          lon,
+          rayonM: poi.rayonM ?? null,
+          legende: (poi.categories ?? []).map((categorie) => ({
+            id: categorie.id,
+            label: categorie.label,
+            total: categorie.total ?? 0,
+          })),
+          points: (poi.categories ?? []).flatMap((categorie) =>
+            (categorie.points ?? []).map((point, index) => ({
+              cle: `poi.carte.${categorie.id}.${index}`,
+              categorie: categorie.id,
+              nom: point.nom ?? null,
+              type: point.type ?? '',
+              distanceM: point.distanceM ?? null,
+              lat: point.lat,
+              lon: point.lon,
+            })),
+          ),
+        }
+      : null
 
   return {
     rayon: formatDistance(poi.rayonM),
     attribution: poi.attribution ?? null,
     disponible: poi.disponible === true,
+    // La carte n'est portée que si le relevé a abouti : un fond de plan seul,
+    // sans un seul point, ne dirait rien que la page ne dise déjà en toutes
+    // lettres.
+    carte: poi.disponible === true && carte?.points.length ? carte : null,
     categories: (poi.categories ?? []).map((categorie) => ({
       id: categorie.id,
       label: categorie.label,
@@ -152,6 +194,59 @@ function commodites(poi) {
         distance: formatDistance(lieu.distanceM) ?? '',
       })),
     })),
+  }
+}
+
+/**
+ * Photos du bien, telles que le formulaire les a recueillies.
+ *
+ * Rend `null` quand il n'y en a aucune, et c'est cette valeur-là qui fait
+ * disparaître la page du rapport — la seule page dont l'existence dépende du
+ * contenu. L'exception à la règle « une page manquante n'existe pas » est
+ * assumée : une page vide indique ce qu'il reste à compléter, mais une page de
+ * photographies vide n'indique rien, elle fait seulement une feuille blanche au
+ * milieu d'un document remis à un client.
+ */
+function photos(liste) {
+  const retenues = Array.isArray(liste) ? liste.filter((photo) => photo?.src) : []
+  if (retenues.length === 0) return null
+
+  return retenues.map((photo, index) => ({
+    cle: `photo.${photo.id ?? index}`,
+    src: photo.src,
+    nom: photo.nom ?? '',
+    // Le rapport de forme du cliché : une vignette portrait glissée dans un
+    // cadre paysage se retrouverait rognée en haut et en bas, ce qui coupe
+    // précisément les toitures et les sols.
+    portrait: photo.hauteur > photo.largeur,
+  }))
+}
+
+/**
+ * Coordonnées de l'agence — statiques, et configurables hors du code (voir
+ * `src/config/agence.js`). Elles sont formatées ici comme le reste : ce sont
+ * des champs de rapport, corrigeables à l'écran comme les autres.
+ */
+function agence() {
+  const ville = [AGENCE.codePostal, AGENCE.ville].filter(Boolean).join(' ') || null
+
+  return {
+    enseigne: AGENCE.enseigne,
+    nom: AGENCE.nom,
+    baseline: AGENCE.baseline,
+    mentionsLegales: AGENCE.mentionsLegales,
+    coordonnees: [
+      champ('agence.adresse', 'Adresse', AGENCE.adresse),
+      champ('agence.ville', 'Code postal et ville', ville),
+      champ('agence.telephone', 'Téléphone', AGENCE.telephone),
+      champ('agence.email', 'Courriel', AGENCE.email),
+      champ('agence.site', 'Site', AGENCE.siteWeb),
+    ],
+    conseiller: [
+      champ('agence.conseiller.nom', 'Votre conseiller', AGENCE.conseiller),
+      champ('agence.conseiller.telephone', 'Téléphone direct', AGENCE.conseillerTelephone),
+      champ('agence.conseiller.email', 'Courriel', AGENCE.conseillerEmail),
+    ],
   }
 }
 
@@ -316,12 +411,22 @@ function comparables(liste) {
   }))
 }
 
-/** Le montant, sa fourchette, et le prix au m² qui en découle. */
-function estimation({ price, characteristics, monaco }) {
+/**
+ * Le montant, sa fourchette, le prix au m² qui en découle — et le détail de ce
+ * qui l'a écarté de la médiane du secteur.
+ *
+ * Les ajustements descendent du moteur déjà appliqués : le montant affiché les
+ * contient. Ils ne sont donc pas là pour être refaits de tête, mais pour être
+ * montrés — un vendeur à qui l'on annonce une décote a le droit de savoir
+ * laquelle, et l'agent qui présente le rapport doit pouvoir la défendre ligne à
+ * ligne (voir `api/_lib/ajustements.js`).
+ */
+function estimation({ price, characteristics, ajustements, monaco }) {
   if (price == null) return null
 
   const fourchette = priceRange(price, monaco ? MONACO_RANGE_PCT : undefined)
   const surface = characteristics?.surfaceHabitable ?? null
+  const details = ajustements?.details ?? []
 
   return {
     prix: formatEuros(price),
@@ -329,6 +434,19 @@ function estimation({ price, characteristics, monaco }) {
     haut: formatEuros(fourchette?.high),
     prixM2: surface > 0 ? parM2(price / surface) : null,
     surface: formatSurfaceOuNull(surface),
+    // Liste vide quand le formulaire n'a rien déclaré qui pèse sur le prix :
+    // la page n'affiche alors pas la section, plutôt qu'un tableau vide qui
+    // laisserait croire à un relevé manquant.
+    ajustements: details.map((detail) => ({
+      cle: `estimation.ajustement.${detail.id}`,
+      label: detail.label,
+      valeur: formatPct(detail.coefficient * 100),
+    })),
+    ajustementTotal: details.length > 0 ? formatPct((ajustements?.coefficient ?? 0) * 100) : null,
+    // Le plafond a-t-il mordu ? La page le dit en toutes lettres : un total qui
+    // ne fait pas la somme de ses lignes, sans explication, passerait pour une
+    // erreur de calcul.
+    ajustementPlafonne: ajustements?.plafonne === true,
   }
 }
 
@@ -361,14 +479,22 @@ function acquereur(profil, credit) {
  * Assemble le modèle d'affichage complet du rapport.
  *
  * Prend tout ce que le parcours a produit — l'adresse saisie, le bâtiment
- * repéré, le montant calculé, le formulaire rempli, les blocs rendus par
- * `api/rapport.js` — et rend les onze pages sous leur forme affichable.
+ * repéré, le montant calculé et ses ajustements, le formulaire rempli, les
+ * photos déposées, les blocs rendus par `api/rapport.js` — et rend les pages
+ * sous leur forme affichable.
  *
  * Aucun appel réseau, aucun aléa : à entrées égales, sorties égales. C'est ce
  * qui permet de recalculer le modèle à chaque rendu sans jamais écraser les
  * corrections de l'agent, qui vivent ailleurs (voir `RapportEdition`).
  */
-export function construireModele({ address, selection, price, characteristics, rapport }) {
+export function construireModele({
+  address,
+  selection,
+  price,
+  ajustements,
+  characteristics,
+  rapport,
+}) {
   const monaco = address?.monaco === true || selection?.monaco === true
   const lat = selection?.lat ?? address?.lat ?? null
   const lon = selection?.lon ?? address?.lon ?? null
@@ -406,13 +532,15 @@ export function construireModele({ address, selection, price, characteristics, r
       ...caracteristiques(characteristics ?? {}),
       ...points(rapport?.points),
     },
-    commodites: commodites(rapport?.poi),
+    photos: photos(characteristics?.photos),
+    commodites: commodites(rapport?.poi, { lat, lon }),
     quartier: quartier(rapport?.quartier),
     marche: marche(rapport?.marche, rapport?.zone),
     budgets: budgets(rapport?.budgets, rapport?.zone),
     historique: historique(rapport?.historique, rapport?.zone),
     comparables: comparables(rapport?.comparables),
-    estimation: estimation({ price, characteristics, monaco }),
+    estimation: estimation({ price, characteristics, ajustements, monaco }),
     acquereur: acquereur(rapport?.profilAcquereur, rapport?.credit),
+    agence: agence(),
   }
 }
