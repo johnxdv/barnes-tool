@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { GoldFrame, Shine } from '../ui/GoldFrame'
 import { CocheCertification, LogoBarnes } from '../ui/LogoBarnes'
 import { HouseIllustration } from './HouseIllustration'
+import { TourEncre } from './TourEncre'
 import {
   ChambresIllustration,
   EpoqueIllustration,
@@ -116,6 +117,47 @@ const TYPE_OPTIONS = [
   { value: 'autre', label: 'Autre' },
 ]
 
+/**
+ * Vue depuis le bien — trois degrés, du plus contraint au plus rare.
+ *
+ * La mer n'y figure pas, et c'est volontaire : le rapport la déduit du trait de
+ * côte relevé par l'IGN (voir `src/lib/environnement.js`) et l'ajoute d'elle-
+ * même à ce qui est déclaré ici — « Dégagée » devient « Dégagée, mer ». La
+ * demander en plus ferait cocher deux cases pour une seule information, et
+ * ferait dépendre d'un clic un fait que le référentiel connaît déjà.
+ */
+const VUE_OPTIONS = [
+  { value: 'vis-a-vis', label: 'Vis-à-vis' },
+  { value: 'degagee', label: 'Dégagée' },
+  { value: 'panoramique', label: 'Panoramique' },
+]
+
+/**
+ * Exposition principale — celle des pièces de vie, pas celle de l'entrée.
+ *
+ * Quatre points cardinaux et pas huit : un « sud-ouest » se déclare « ouest »
+ * ou « sud » sans que l'acquéreur y perde quoi que ce soit, et huit boutons sur
+ * une carte de formulaire deviennent illisibles.
+ */
+const EXPOSITION_OPTIONS = [
+  { value: 'nord', label: 'Nord' },
+  { value: 'est', label: 'Est' },
+  { value: 'sud', label: 'Sud' },
+  { value: 'ouest', label: 'Ouest' },
+]
+
+/**
+ * Luminosité — ce qu'on ressent en entrant, et que ni l'exposition ni l'étage
+ * ne suffisent à prédire : un troisième plein sud est sombre si l'immeuble d'en
+ * face est plus haut. Seul quelqu'un qui a visité peut répondre.
+ */
+const LUMINOSITE_OPTIONS = [
+  { value: 'sombre', label: 'Sombre' },
+  { value: 'correcte', label: 'Correcte' },
+  { value: 'lumineuse', label: 'Lumineuse' },
+  { value: 'traversante', label: 'Traversante' },
+]
+
 const STANDING_OPTIONS = [
   { value: 'standard', label: 'Standard' },
   { value: 'bon-standing', label: 'Bon standing' },
@@ -187,6 +229,9 @@ const VALEURS_VIDES = {
   nombreChambres: null,
   nombreSallesBain: null,
   nombreSallesEau: null,
+  vue: null,
+  exposition: null,
+  luminosite: null,
   standing: null,
   classeEnergie: null,
   // Colonne « Informations sur le bâti »
@@ -200,6 +245,29 @@ const VALEURS_VIDES = {
   // prétend rien sur le bien, là où un `0` sur un compteur serait une
   // déclaration. Voir `PhotosField`.
   photos: [],
+}
+
+/**
+ * Champs comptés dans l'avancement du formulaire — tous, sauf deux.
+ *
+ * `photos` en est écarté : il vaut liste vide au départ et non `null`, il
+ * compterait donc pour rempli dès l'ouverture. `etage` aussi, mais pour une
+ * raison de fond : il n'existe qu'en appartement, et le compter ferait qu'une
+ * maison entièrement renseignée n'atteindrait jamais le sommet de la tour.
+ *
+ * L'avancement qui en sort n'est pas une mesure de complétude — rien n'est
+ * obligatoire sur cet écran — mais une réponse au geste : chaque champ réglé
+ * ajoute une tranche au bâtiment de droite. C'est le seul usage qui en est
+ * fait, et il n'a donc pas à être exact au champ près.
+ */
+const CHAMPS_COMPTES = Object.keys(VALEURS_VIDES).filter(
+  (champ) => champ !== 'photos' && champ !== 'etage',
+)
+
+/** Part des champs renseignés, de 0 à 1. */
+function avancement(values) {
+  const remplis = CHAMPS_COMPTES.filter((champ) => values[champ] != null).length
+  return remplis / CHAMPS_COMPTES.length
 }
 
 const nombreFr = new Intl.NumberFormat('fr-FR')
@@ -273,301 +341,366 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
     onValidate?.(values)
   }
 
+  // L'avancement pilote la tour de droite, et rien d'autre : il n'est ni
+  // affiché en pourcentage, ni annoncé, ni bloquant. Un formulaire dont aucun
+  // champ n'est obligatoire ne doit pas se mettre à réclamer d'être complété.
+  const progression = avancement(values)
+
   return (
-    <div className="w-full max-w-5xl">
-      <button
-        type="button"
-        onClick={onBack}
-        className="group mb-8 inline-flex touch-manipulation items-center gap-2 font-mono text-[0.7rem] uppercase tracking-micro text-ink/45 transition-colors hover:text-ink"
-      >
-        <ArrowLeft
-          className="h-4 w-4 transition-transform duration-300 ease-plan group-hover:-translate-x-1"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
-        Retour
-      </button>
-
-      <div className="animate-fade-up text-center">
-        {/* L'écusson au-dessus du titre, à la place de la pastille d'icône que
-            portait cet écran, et le tampon de certification à sa droite.
-
-            Le sautillement est ici `saut-doux` et non le `saut` de l'écran
-            d'adresse : deux fois plus lent, trois fois moins ample. Là-bas le
-            logo est seul en haut d'une page vide ; ici il surmonte un titre et
-            quinze cartes de saisie, où le même ressort passerait du charme au
-            tic.
-
-            Le tampon, lui, ne joue qu'une fois — c'est le propre d'une
-            certification. `-ml-1` le fait mordre légèrement sur l'écusson,
-            comme un cachet apposé par-dessus. */}
-        <span className="mx-auto flex w-fit items-center justify-center gap-1">
-          <LogoBarnes mouvement="saut-doux" className="h-14 w-14" />
-          <CocheCertification className="-ml-1 mt-5 h-6 w-6 shrink-0" />
-        </span>
-
-        <h1 className="mt-5 font-display text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">
-          Les caractéristiques de votre bien
-        </h1>
-        <p className="mx-auto mt-3 max-w-lg text-base leading-relaxed text-ink/55">
-          Réglez ce que vous savez, laissez le reste de côté — aucun champ n’est
-          obligatoire.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="mt-10">
-        {/* `items-start` : sans lui, la colonne la plus courte s'étirerait à la
-            hauteur de l'autre et son cadre enfermerait un grand vide. */}
-        <div className="grid items-start gap-5 lg:grid-cols-2 lg:gap-6">
-          <Colonne colonne={COLONNES.bien} delai={0.05}>
-            {typeDetecte ? null : (
-              <SegmentedField
-                key="type"
-                label="Type de bien"
-                options={TYPE_OPTIONS}
-                value={values.typeBien}
-                onChange={setTypeBien}
-              />
-            )}
-
-            {/* Le seul champ conditionnel du formulaire, posé juste sous ce qui
-                le fait naître : il apparaît là où l'on vient de cliquer. Sa clé
-                est explicite comme celles de ses voisins — c'est ce qui permet
-                à la colonne de l'insérer sans remonter les cartes suivantes,
-                donc sans rejouer leur arrivée en cascade.
-
-                Sa condition porte sur l'état, pas sur les boutons : un type
-                détecté le fait naître aussi bien qu'un type cliqué, et l'étage
-                se demande alors sans que le type ait jamais été affiché. */}
-            {values.typeBien === 'appartement' ? (
-              <StepperField
-                key="etage"
-                label="Étage"
-                value={values.etage}
-                onChange={set('etage')}
-                max={PLAFONDS.etage}
-                format={etageLabel}
-                illustrationHeight="mt-2 h-[4.5rem]"
-                illustration={(niveau) => <EtageIllustration value={niveau} />}
-              />
-            ) : null}
-
-            <SliderField
-              key="surface-habitable"
-              label="Surface habitable"
-              value={values.surfaceHabitable}
-              onChange={set('surfaceHabitable')}
-              {...BORNES.surfaceHabitable}
-              format={surfaceLabel(BORNES.surfaceHabitable.max)}
-              minLabel="10 m²"
-              maxLabel="800+ m²"
-              illustrationHeight="mt-1 h-[5.25rem]"
-              illustration={(surface) => (
-                <HouseIllustration surfaceM2={surface} className="h-full w-full" />
-              )}
-            />
-
-            <SliderField
-              key="surface-terrain"
-              label="Surface du terrain"
-              value={values.surfaceTerrain}
-              onChange={set('surfaceTerrain')}
-              {...BORNES.surfaceTerrain}
-              format={surfaceLabel(BORNES.surfaceTerrain.max)}
-              minLabel="0 m²"
-              maxLabel="5 000+ m²"
-              illustration={(surface) => (
-                <TerrainIllustration value={surface} max={BORNES.surfaceTerrain.max} />
-              )}
-            />
-
-            <SliderField
-              key="surface-terrasse"
-              label="Surface de la terrasse"
-              value={values.surfaceTerrasse}
-              onChange={set('surfaceTerrasse')}
-              {...BORNES.surfaceTerrasse}
-              format={surfaceLabel(BORNES.surfaceTerrasse.max)}
-              minLabel="0 m²"
-              maxLabel="200+ m²"
-              illustration={(surface) => (
-                <TerrasseIllustration value={surface} max={BORNES.surfaceTerrasse.max} />
-              )}
-            />
-
-            <StepperField
-              key="pieces"
-              label="Nombre de pièces"
-              value={values.nombrePieces}
-              onChange={set('nombrePieces')}
-              max={PLAFONDS.nombrePieces}
-              allowCustom
-              illustrationHeight="mt-2 h-16"
-              illustration={(count) => (
-                <PiecesIllustration count={count} max={PLAFONDS.nombrePieces} />
-              )}
-            />
-
-            <StepperField
-              key="chambres"
-              label="Nombre de chambres"
-              value={values.nombreChambres}
-              onChange={set('nombreChambres')}
-              max={PLAFONDS.nombreChambres}
-              allowCustom
-              illustration={(count) => <ChambresIllustration count={count} />}
-            />
-
-            <StepperField
-              key="sdb"
-              label="Salles de bain"
-              value={values.nombreSallesBain}
-              onChange={set('nombreSallesBain')}
-              max={PLAFONDS.nombreSallesBain}
-              illustration={(count) => <SdbIllustration count={count} />}
-            />
-
-            <StepperField
-              key="salles-eau"
-              label="Salles d’eau"
-              value={values.nombreSallesEau}
-              onChange={set('nombreSallesEau')}
-              max={PLAFONDS.nombreSallesEau}
-              illustrationHeight="mt-2 h-16"
-              illustration={(count) => <SalleEauIllustration count={count} />}
-            />
-
-            <SegmentedField
-              key="standing"
-              label="Standing"
-              options={STANDING_OPTIONS}
-              value={values.standing}
-              onChange={set('standing')}
-            />
-
-            {dpeDetecte ? null : (
-              <DpeField
-                key="dpe"
-                label="Classe énergie (DPE)"
-                value={values.classeEnergie}
-                onChange={set('classeEnergie')}
-              />
-            )}
-          </Colonne>
-
-          <Colonne colonne={COLONNES.bati} delai={0.15}>
-            <NumberField
-              key="annee"
-              label="Année de construction"
-              value={values.anneeConstruction}
-              onChange={set('anneeConstruction')}
-              {...ANNEE}
-              placeholder="AAAA"
-              hint="1800 – 2026"
-              illustrationHeight="mt-1 h-[5.25rem]"
-              illustration={(annee) => <EpoqueIllustration value={annee} />}
-            />
-
-            <StepperField
-              key="niveaux"
-              label="Nombre de niveaux"
-              value={values.nombreNiveaux}
-              onChange={set('nombreNiveaux')}
-              max={PLAFONDS.nombreNiveaux}
-              illustrationHeight="mt-2 h-[4.5rem]"
-              illustration={(count) => <NiveauxIllustration count={count} />}
-            />
-
-            <SegmentedField
-              key="etat"
-              label="État général du bien"
-              options={ETAT_OPTIONS}
-              value={values.etatGeneral}
-              onChange={set('etatGeneral')}
-            />
-
-            <ToggleField
-              key="piscine"
-              label="Piscine"
-              value={values.piscine}
-              onChange={set('piscine')}
-              illustration={<PiscineIllustration active={values.piscine === true} />}
-            />
-
-            <DualStepperField
-              key="stationnements"
-              label="Stationnements"
-              fields={[
-                {
-                  label: 'Extérieurs',
-                  suffix: 'ext.',
-                  value: values.stationnementsExterieurs,
-                  onChange: set('stationnementsExterieurs'),
-                  max: PLAFONDS.stationnementsExterieurs,
-                  illustration: (count) => <ParkingExtIllustration count={count} />,
-                },
-                {
-                  label: 'Intérieurs',
-                  suffix: 'int.',
-                  value: values.stationnementsInterieurs,
-                  onChange: set('stationnementsInterieurs'),
-                  max: PLAFONDS.stationnementsInterieurs,
-                  illustration: (count) => <ParkingIntIllustration count={count} />,
-                },
-              ]}
-            />
-          </Colonne>
-        </div>
-
-        {/* Les photos tiennent toute la largeur, sous les deux colonnes : une
-            grille de vignettes enfermée dans une demi-colonne ne montrerait
-            plus rien, et le champ n'appartient de toute façon ni au bien ni au
-            bâti — il les regarde tous les deux. Les variables de couleur sont
-            celles de la colonne « Votre bien », dont il prolonge le propos. */}
-        <section
-          style={{
-            '--accent': COLONNES.bien.accent,
-            '--accent-from': COLONNES.bien.from,
-            '--accent-tint': COLONNES.bien.tint,
-            animationDelay: '0.3s',
-          }}
-          className="animate-fade-up mt-5 rounded-2xl border border-ink/10 bg-stone/40 p-3 sm:p-4 lg:mt-6"
-        >
-          <header className="mb-3 flex items-center gap-2.5 px-1">
-            <span
-              aria-hidden="true"
-              className="h-6 w-1 shrink-0 rounded-full bg-[color:var(--accent)]"
-            />
-            <h2 className="font-mono text-[0.66rem] uppercase tracking-micro text-[color:var(--accent)]">
-              Photos du bien
-            </h2>
-          </header>
-
-          <PhotosField
-            label="Photos du bien"
-            value={values.photos}
-            onChange={set('photos')}
-          />
-        </section>
-
-        <div
-          style={{ animationDelay: '0.4s' }}
-          className="animate-fade-up relative mx-auto mt-8 max-w-[19rem]"
-        >
-          <GoldFrame className="-inset-[2px] rounded-[0.87rem]" />
-          <motion.button
-            type="submit"
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            className="group relative flex w-full touch-manipulation items-center justify-center overflow-hidden rounded-xl bg-ink px-5 py-4 shadow-[0_8px_20px_-10px_rgba(60,60,60,0.55),0_0_10px_-5px_rgba(176,141,87,0.7)] transition-shadow duration-300 ease-plan hover:shadow-[0_10px_24px_-10px_rgba(60,60,60,0.6),0_0_14px_-4px_rgba(176,141,87,0.85)]"
+    /* Trois quarts pour le formulaire, un quart pour la tour, à partir de
+       1280 px seulement. En dessous, le formulaire occupe déjà deux colonnes
+       serrées : lui en retirer une troisième rendrait les cartes illisibles, et
+       une tour de six centimètres ne vaudrait pas ce prix. */
+    <div className="w-full max-w-5xl xl:max-w-[84rem]">
+      <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_19rem] xl:gap-14">
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={onBack}
+            className="group mb-8 inline-flex touch-manipulation items-center gap-2 font-mono text-[0.7rem] uppercase tracking-micro text-ink/45 transition-colors hover:text-ink"
           >
-            <Shine width="w-1/5" tint="via-brass/40" />
-            <span className="relative font-mono text-[0.7rem] uppercase tracking-micro text-white">
-              Valider
+            <ArrowLeft
+              className="h-4 w-4 transition-transform duration-300 ease-plan group-hover:-translate-x-1"
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            Retour
+          </button>
+
+          <div className="animate-fade-up text-center">
+            {/* L'écusson au-dessus du titre, à la place de la pastille d'icône que
+                portait cet écran, et le tampon de certification à sa droite.
+
+                Le sautillement est ici `saut-doux` et non le `saut` de l'écran
+                d'adresse : deux fois plus lent, trois fois moins ample. Là-bas le
+                logo est seul en haut d'une page vide ; ici il surmonte un titre et
+                quinze cartes de saisie, où le même ressort passerait du charme au
+                tic.
+
+                Le tampon, lui, ne joue qu'une fois — c'est le propre d'une
+                certification. `-ml-1` le fait mordre légèrement sur l'écusson,
+                comme un cachet apposé par-dessus. */}
+            <span className="mx-auto flex w-fit items-center justify-center gap-1">
+              <LogoBarnes mouvement="saut-doux" className="h-14 w-14" />
+              <CocheCertification className="-ml-1 mt-5 h-6 w-6 shrink-0" />
             </span>
-          </motion.button>
+
+            <h1 className="mt-5 font-display text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">
+              Les caractéristiques du bien
+            </h1>
+            <p className="mx-auto mt-3 max-w-lg text-base leading-relaxed text-ink/55">
+              Réglez ce que vous savez, laissez le reste de côté — aucun champ n’est
+              obligatoire.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-10">
+            {/* `items-start` : sans lui, la colonne la plus courte s'étirerait à la
+                hauteur de l'autre et son cadre enfermerait un grand vide. */}
+            <div className="grid items-start gap-5 lg:grid-cols-2 lg:gap-6">
+              <Colonne colonne={COLONNES.bien} delai={0.05}>
+                {typeDetecte ? null : (
+                  <SegmentedField
+                    key="type"
+                    label="Type de bien"
+                    options={TYPE_OPTIONS}
+                    value={values.typeBien}
+                    onChange={setTypeBien}
+                  />
+                )}
+
+                {/* Le seul champ conditionnel du formulaire, posé juste sous ce qui
+                    le fait naître : il apparaît là où l'on vient de cliquer. Sa clé
+                    est explicite comme celles de ses voisins — c'est ce qui permet
+                    à la colonne de l'insérer sans remonter les cartes suivantes,
+                    donc sans rejouer leur arrivée en cascade.
+
+                    Sa condition porte sur l'état, pas sur les boutons : un type
+                    détecté le fait naître aussi bien qu'un type cliqué, et l'étage
+                    se demande alors sans que le type ait jamais été affiché. */}
+                {values.typeBien === 'appartement' ? (
+                  <StepperField
+                    key="etage"
+                    label="Étage"
+                    value={values.etage}
+                    onChange={set('etage')}
+                    max={PLAFONDS.etage}
+                    format={etageLabel}
+                    illustrationHeight="mt-2 h-[4.5rem]"
+                    illustration={(niveau) => <EtageIllustration value={niveau} />}
+                  />
+                ) : null}
+
+                <SliderField
+                  key="surface-habitable"
+                  label="Surface habitable"
+                  value={values.surfaceHabitable}
+                  onChange={set('surfaceHabitable')}
+                  {...BORNES.surfaceHabitable}
+                  format={surfaceLabel(BORNES.surfaceHabitable.max)}
+                  minLabel="10 m²"
+                  maxLabel="800+ m²"
+                  illustrationHeight="mt-1 h-[5.25rem]"
+                  illustration={(surface) => (
+                    <HouseIllustration surfaceM2={surface} className="h-full w-full" />
+                  )}
+                />
+
+                <SliderField
+                  key="surface-terrain"
+                  label="Surface du terrain"
+                  value={values.surfaceTerrain}
+                  onChange={set('surfaceTerrain')}
+                  {...BORNES.surfaceTerrain}
+                  format={surfaceLabel(BORNES.surfaceTerrain.max)}
+                  minLabel="0 m²"
+                  maxLabel="5 000+ m²"
+                  illustration={(surface) => (
+                    <TerrainIllustration value={surface} max={BORNES.surfaceTerrain.max} />
+                  )}
+                />
+
+                <SliderField
+                  key="surface-terrasse"
+                  label="Surface de la terrasse"
+                  value={values.surfaceTerrasse}
+                  onChange={set('surfaceTerrasse')}
+                  {...BORNES.surfaceTerrasse}
+                  format={surfaceLabel(BORNES.surfaceTerrasse.max)}
+                  minLabel="0 m²"
+                  maxLabel="200+ m²"
+                  illustration={(surface) => (
+                    <TerrasseIllustration value={surface} max={BORNES.surfaceTerrasse.max} />
+                  )}
+                />
+
+                <StepperField
+                  key="pieces"
+                  label="Nombre de pièces"
+                  value={values.nombrePieces}
+                  onChange={set('nombrePieces')}
+                  max={PLAFONDS.nombrePieces}
+                  allowCustom
+                  illustrationHeight="mt-2 h-16"
+                  illustration={(count) => (
+                    <PiecesIllustration count={count} max={PLAFONDS.nombrePieces} />
+                  )}
+                />
+
+                <StepperField
+                  key="chambres"
+                  label="Nombre de chambres"
+                  value={values.nombreChambres}
+                  onChange={set('nombreChambres')}
+                  max={PLAFONDS.nombreChambres}
+                  allowCustom
+                  illustration={(count) => <ChambresIllustration count={count} />}
+                />
+
+                <StepperField
+                  key="sdb"
+                  label="Salles de bain"
+                  value={values.nombreSallesBain}
+                  onChange={set('nombreSallesBain')}
+                  max={PLAFONDS.nombreSallesBain}
+                  illustration={(count) => <SdbIllustration count={count} />}
+                />
+
+                <StepperField
+                  key="salles-eau"
+                  label="Salles d’eau"
+                  value={values.nombreSallesEau}
+                  onChange={set('nombreSallesEau')}
+                  max={PLAFONDS.nombreSallesEau}
+                  illustrationHeight="mt-2 h-16"
+                  illustration={(count) => <SalleEauIllustration count={count} />}
+                />
+
+                {/* Les trois champs du cadre de vie, groupés et placés juste avant
+                    le standing : ils décrivent ce qu'on voit et ce qu'on ressent,
+                    là où tout ce qui précède se compte. Le rapport les reprend dans
+                    son bloc « Environnement du bien », où il les complète de ce que
+                    les référentiels savent seuls — niveau sonore, littoral, espaces
+                    boisés (voir `src/lib/environnement.js`). */}
+                <SegmentedField
+                  key="vue"
+                  label="Vue depuis le bien"
+                  options={VUE_OPTIONS}
+                  value={values.vue}
+                  onChange={set('vue')}
+                />
+
+                <SegmentedField
+                  key="exposition"
+                  label="Exposition principale"
+                  options={EXPOSITION_OPTIONS}
+                  value={values.exposition}
+                  onChange={set('exposition')}
+                />
+
+                <SegmentedField
+                  key="luminosite"
+                  label="Luminosité"
+                  options={LUMINOSITE_OPTIONS}
+                  value={values.luminosite}
+                  onChange={set('luminosite')}
+                />
+
+                <SegmentedField
+                  key="standing"
+                  label="Standing"
+                  options={STANDING_OPTIONS}
+                  value={values.standing}
+                  onChange={set('standing')}
+                />
+
+                {dpeDetecte ? null : (
+                  <DpeField
+                    key="dpe"
+                    label="Classe énergie (DPE)"
+                    value={values.classeEnergie}
+                    onChange={set('classeEnergie')}
+                  />
+                )}
+              </Colonne>
+
+              <Colonne colonne={COLONNES.bati} delai={0.15}>
+                <NumberField
+                  key="annee"
+                  label="Année de construction"
+                  value={values.anneeConstruction}
+                  onChange={set('anneeConstruction')}
+                  {...ANNEE}
+                  placeholder="AAAA"
+                  hint="1800 – 2026"
+                  illustrationHeight="mt-1 h-[5.25rem]"
+                  illustration={(annee) => <EpoqueIllustration value={annee} />}
+                />
+
+                <StepperField
+                  key="niveaux"
+                  label="Nombre de niveaux"
+                  value={values.nombreNiveaux}
+                  onChange={set('nombreNiveaux')}
+                  max={PLAFONDS.nombreNiveaux}
+                  illustrationHeight="mt-2 h-[4.5rem]"
+                  illustration={(count) => <NiveauxIllustration count={count} />}
+                />
+
+                <SegmentedField
+                  key="etat"
+                  label="État général du bien"
+                  options={ETAT_OPTIONS}
+                  value={values.etatGeneral}
+                  onChange={set('etatGeneral')}
+                />
+
+                <ToggleField
+                  key="piscine"
+                  label="Piscine"
+                  value={values.piscine}
+                  onChange={set('piscine')}
+                  illustration={<PiscineIllustration active={values.piscine === true} />}
+                />
+
+                <DualStepperField
+                  key="stationnements"
+                  label="Stationnements"
+                  fields={[
+                    {
+                      label: 'Extérieurs',
+                      suffix: 'ext.',
+                      value: values.stationnementsExterieurs,
+                      onChange: set('stationnementsExterieurs'),
+                      max: PLAFONDS.stationnementsExterieurs,
+                      illustration: (count) => <ParkingExtIllustration count={count} />,
+                    },
+                    {
+                      label: 'Intérieurs',
+                      suffix: 'int.',
+                      value: values.stationnementsInterieurs,
+                      onChange: set('stationnementsInterieurs'),
+                      max: PLAFONDS.stationnementsInterieurs,
+                      illustration: (count) => <ParkingIntIllustration count={count} />,
+                    },
+                  ]}
+                />
+              </Colonne>
+            </div>
+
+            {/* Les photos tiennent toute la largeur, sous les deux colonnes : une
+                grille de vignettes enfermée dans une demi-colonne ne montrerait
+                plus rien, et le champ n'appartient de toute façon ni au bien ni au
+                bâti — il les regarde tous les deux. Les variables de couleur sont
+                celles de la colonne « Votre bien », dont il prolonge le propos. */}
+            <section
+              style={{
+                '--accent': COLONNES.bien.accent,
+                '--accent-from': COLONNES.bien.from,
+                '--accent-tint': COLONNES.bien.tint,
+                animationDelay: '0.3s',
+              }}
+              className="animate-fade-up mt-5 rounded-2xl border border-ink/10 bg-stone/40 p-3 sm:p-4 lg:mt-6"
+            >
+              <header className="mb-3 flex items-center gap-2.5 px-1">
+                <span
+                  aria-hidden="true"
+                  className="h-6 w-1 shrink-0 rounded-full bg-[color:var(--accent)]"
+                />
+                <h2 className="font-mono text-[0.66rem] uppercase tracking-micro text-[color:var(--accent)]">
+                  Photos du bien
+                </h2>
+              </header>
+
+              <PhotosField
+                label="Photos du bien"
+                value={values.photos}
+                onChange={set('photos')}
+              />
+            </section>
+
+            <div
+              style={{ animationDelay: '0.4s' }}
+              className="animate-fade-up relative mx-auto mt-8 max-w-[19rem]"
+            >
+              <GoldFrame className="-inset-[2px] rounded-[0.87rem]" />
+              <motion.button
+                type="submit"
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                className="group relative flex w-full touch-manipulation items-center justify-center overflow-hidden rounded-xl bg-ink px-5 py-4 shadow-[0_8px_20px_-10px_rgba(60,60,60,0.55),0_0_10px_-5px_rgba(176,141,87,0.7)] transition-shadow duration-300 ease-plan hover:shadow-[0_10px_24px_-10px_rgba(60,60,60,0.6),0_0_14px_-4px_rgba(176,141,87,0.85)]"
+              >
+                <Shine width="w-1/5" tint="via-brass/40" />
+                <span className="relative font-mono text-[0.7rem] uppercase tracking-micro text-white">
+                  Valider
+                </span>
+              </motion.button>
+            </div>
+          </form>
         </div>
-      </form>
+
+        {/* La Tour Barnes, qui sort de terre à mesure que le formulaire se
+            remplit — même dessin que l'écran d'adresse, en régime piloté
+            plutôt qu'autonome (voir `TourEncre`). Chaque champ réglé lui ajoute
+            une tranche, et l'écusson se pose au sommet quand il ne reste plus
+            rien à renseigner.
+
+            `sticky` : l'écran fait deux fois la hauteur de la fenêtre, et une
+            tour posée en haut de page aurait disparu au moment où l'on remplit
+            les champs qui la font monter. Elle suit donc le défilement.
+
+            `aria-hidden` : c'est une récompense visuelle, pas une information.
+            L'avancement d'un formulaire dont aucun champ n'est obligatoire n'a
+            rien à annoncer à un lecteur d'écran. */}
+        <div aria-hidden="true" className="relative hidden xl:block">
+          <div className="sticky top-24 flex justify-center">
+            <TourEncre
+              progression={progression}
+              className="h-[74vh] max-h-[42rem] w-full"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

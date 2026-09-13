@@ -165,22 +165,40 @@ function Ghost({ width, children }) {
 
 /* ------------------------------------------------------------------ terrain */
 
+/** Au-delà, une parcelle a la place d'un bassin — et un bien de ce standing en a un. */
+const TERRAIN_PISCINE = 900
+
 /**
- * Surface du terrain — la parcelle s'élargit sous la maison, et se boise.
+ * Surface du terrain — la parcelle s'élargit sous la villa, et se boise.
  *
- * La maison ne bouge pas d'un pixel : c'est l'étalon qui rend l'agrandissement
+ * La villa ne bouge pas d'un pixel : c'est l'étalon qui rend l'agrandissement
  * lisible. Sans elle, une bande verte qui s'allonge ne dirait rien d'une
  * surface. Les arbres arrivent par paliers, aux extrémités d'abord — la
  * parcelle se remplit du bord vers le centre, comme un terrain réellement
  * planté.
+ *
+ * ── Deux corrections, et la même raison derrière ──────────────────────────
+ *
+ * L'étalon était un pavillon de vingt-six unités de large : pignon triangulaire,
+ * porte au milieu, deux fenêtres. Sur un outil qui estime des villas et des
+ * mas, il tirait le champ vers le bas, et sa petitesse desservait même sa
+ * fonction — un étalon trop menu rend toute parcelle immense. C'est désormais
+ * une villa contemporaine à deux volumes, moitié plus large.
+ *
+ * Le bassin, lui, apparaît passé neuf cents mètres carrés. Il n'est pas un
+ * ornement : il dit ce que la surface *permet*, ce qu'aucune bande verte plus
+ * longue ne dit. C'est aussi le seuil à partir duquel la question se pose
+ * réellement pour un acquéreur — et le champ « Piscine » du formulaire, deux
+ * cartes plus bas, en devient moins abstrait.
  */
 export function TerrainIllustration({ value = 0, max = 5000 }) {
   const ratio = clamp01(value / max)
   const width = 46 + ratio * 164
   const trees = Math.min(7, Math.floor(value / 620))
+  const piscine = value >= TERRAIN_PISCINE
 
   // Emplacements en fraction de largeur, dans l'ordre d'apparition. Le centre
-  // (0,5) est laissé à la maison : aucune position n'y tombe.
+  // (0,5) est laissé à la villa : aucune position n'y tombe.
   const spots = [0.09, 0.91, 0.24, 0.78, 0.03, 0.97, 0.33]
 
   return (
@@ -219,13 +237,73 @@ export function TerrainIllustration({ value = 0, max = 5000 }) {
         })}
       </AnimatePresence>
 
-      {/* Maison-étalon, immobile au centre. */}
+      {/* Le bassin, dès que la parcelle a la place de l'accueillir. Posé à
+          gauche de la villa, dont il ne doit pas mordre le pied — sans quoi il
+          se lit comme une piscine intérieure — et en trapèze : vu de trois
+          quarts comme le reste de la scène, un rectangle plein se lirait comme
+          une dalle. */}
+      <AnimatePresence initial={false}>
+        {piscine ? (
+          <motion.g
+            key="piscine"
+            style={{ transformOrigin: '73px -6px' }}
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.4 }}
+            transition={POP}
+          >
+            <path
+              d="M50 -2 L56 -14 L86 -14 L92 -2 Z"
+              fill="#1F3B2E"
+              fillOpacity="0.5"
+              stroke="#1F3B2E"
+              strokeOpacity="0.7"
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+            />
+            {/* Deux rides — c'est ce qui distingue un bassin d'un carré sombre. */}
+            <path
+              d="M60 -10 q4 -2 8 0 t8 0"
+              fill="none"
+              stroke="#F5F5F5"
+              strokeOpacity="0.65"
+              strokeWidth="1"
+              strokeLinecap="round"
+            />
+            <path
+              d="M58 -6 q5 -2 10 0 t10 0"
+              fill="none"
+              stroke="#F5F5F5"
+              strokeOpacity="0.45"
+              strokeWidth="1"
+              strokeLinecap="round"
+            />
+          </motion.g>
+        ) : null}
+      </AnimatePresence>
+
+      {/* La villa-étalon, immobile au centre. Deux volumes décalés, l'étage en
+          porte-à-faux sur ses poteaux : la même architecture que la planche de
+          l'écran d'analyse, à l'échelle du pictogramme. */}
       <g transform="translate(120 0)">
-        <rect x="-13" y="-22" width="26" height="22" fill="currentColor" />
-        <path d="M-17 -21 L0 -34 L17 -21 Z" fill="#B4002F" />
-        <rect x="-4" y="-13" width="8" height="13" rx="1" fill="#F5F5F5" />
-        <rect x="-10" y="-18" width="5" height="5" rx="1" fill="#F5F5F5" />
-        <rect x="5" y="-18" width="5" height="5" rx="1" fill="#F5F5F5" />
+        {/* Volume bas, en retrait à droite. */}
+        <rect x="-20" y="-19" width="30" height="19" fill="currentColor" />
+        {/* Étage en porte-à-faux, décalé et plus long que le volume du bas. */}
+        <rect x="-14" y="-33" width="34" height="14" fill="currentColor" fillOpacity="0.88" />
+        {/* Les deux dalles qui débordent — c'est ce débord qui fait
+            « contemporain » plutôt que « boîte ». */}
+        <rect x="-24" y="-20.5" width="46" height="2.5" rx="1" fill="#B4002F" />
+        <rect x="-17" y="-35" width="40" height="2.5" rx="1" fill="#B4002F" />
+        {/* Poteaux sous le porte-à-faux. */}
+        <rect x="12" y="-19" width="1.6" height="19" fill="currentColor" fillOpacity="0.55" />
+        <rect x="17" y="-19" width="1.6" height="19" fill="currentColor" fillOpacity="0.55" />
+        {/* Les baies, en meneaux clairs plutôt qu'en fenêtres découpées. */}
+        {[-17, -12, -7, -2, 3].map((x) => (
+          <rect key={`bas${x}`} x={x} y="-16" width="2.6" height="16" fill="#F5F5F5" fillOpacity="0.85" />
+        ))}
+        {[-11, -6, -1, 4, 9, 14].map((x) => (
+          <rect key={`haut${x}`} x={x} y="-31" width="2.4" height="10" fill="#F5F5F5" fillOpacity="0.7" />
+        ))}
       </g>
     </Scene>
   )

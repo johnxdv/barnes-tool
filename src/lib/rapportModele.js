@@ -29,6 +29,7 @@ import {
   formatSurface,
   priceRange,
 } from './format.js'
+import { qualifierAcces } from './environnement.js'
 import { orthoImageUrl } from './ign.js'
 import { MONACO_RANGE_PCT } from './monaco.js'
 import { AGENCE } from '../config/agence.js'
@@ -49,6 +50,21 @@ const ETAT_LABELS = {
   'bon-etat': 'Bon état',
   renove: 'Rénové',
   neuf: 'Neuf',
+}
+
+const VUE_LABELS = {
+  'vis-a-vis': 'Vis-à-vis',
+  degagee: 'Dégagée',
+  panoramique: 'Panoramique',
+}
+
+const EXPOSITION_LABELS = { nord: 'Nord', est: 'Est', sud: 'Sud', ouest: 'Ouest' }
+
+const LUMINOSITE_LABELS = {
+  sombre: 'Sombre',
+  correcte: 'Correcte',
+  lumineuse: 'Lumineuse',
+  traversante: 'Traversante',
 }
 
 /** Étage écrit comme on le dit — le zéro d'un appartement est un rez-de-chaussée. */
@@ -140,52 +156,71 @@ function points(suggestions) {
  * aucune liste de distances ne le dit.
  */
 function commodites(poi, { lat, lon }) {
-  if (!poi) return null
-
   // Le centre de la carte est le bien lui-même — le même point que celui
-  // interrogé chez Overpass, faute de quoi les distances de la liste ne
+  // interrogé chez la source, faute de quoi les distances de la liste ne
   // correspondraient plus aux positions portées à la carte.
-  const carte =
-    Number.isFinite(lat) && Number.isFinite(lon)
-      ? {
-          lat,
-          lon,
-          rayonM: poi.rayonM ?? null,
-          legende: (poi.categories ?? []).map((categorie) => ({
-            id: categorie.id,
-            label: categorie.label,
-            total: categorie.total ?? 0,
-          })),
-          points: (poi.categories ?? []).flatMap((categorie) =>
-            (categorie.points ?? []).map((point, index) => ({
-              cle: `poi.carte.${categorie.id}.${index}`,
-              categorie: categorie.id,
-              nom: point.nom ?? null,
-              type: point.type ?? '',
-              distanceM: point.distanceM ?? null,
-              lat: point.lat,
-              lon: point.lon,
-            })),
-          ),
-        }
-      : null
+  //
+  // Sans coordonnées, il n'y a rien à cartographier ni à relever : c'est le cas
+  // de Monaco, dont la page est écartée du rapport en amont.
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+
+  const categories = poi?.categories ?? []
+  const rayonM = poi?.rayonM ?? null
+
+  // La carte est portée dans tous les cas, points ou non. C'était l'inverse, et
+  // c'était l'erreur : un relevé vide faisait disparaître la carte *et*
+  // affichait un message d'excuse, alors qu'un fond de plan centré sur le bien
+  // avec son disque de recherche dit déjà quelque chose de juste — le quartier,
+  // ses rues, et le fait qu'on n'y a rien trouvé à cette distance. Le relevé,
+  // lui, ne rend plus de page vide (voir `src/lib/poi.js`).
+  const carte = {
+    lat,
+    lon,
+    rayonM,
+    legende: categories
+      .filter((categorie) => categorie.horsPortee !== true)
+      .map((categorie) => ({
+        id: categorie.id,
+        label: categorie.label,
+        total: categorie.total ?? 0,
+      })),
+    points: categories.flatMap((categorie) =>
+      (categorie.points ?? []).map((point, index) => ({
+        cle: `poi.carte.${categorie.id}.${index}`,
+        categorie: categorie.id,
+        nom: point.nom ?? null,
+        type: point.type ?? '',
+        distanceM: point.distanceM ?? null,
+        lat: point.lat,
+        lon: point.lon,
+      })),
+    ),
+  }
 
   return {
-    rayon: formatDistance(poi.rayonM),
-    attribution: poi.attribution ?? null,
-    disponible: poi.disponible === true,
-    // La carte n'est portée que si le relevé a abouti : un fond de plan seul,
-    // sans un seul point, ne dirait rien que la page ne dise déjà en toutes
-    // lettres.
-    carte: poi.disponible === true && carte?.points.length ? carte : null,
-    categories: (poi.categories ?? []).map((categorie) => ({
+    rayon: formatDistance(rayonM),
+    attribution: poi?.attribution ?? null,
+    source: poi?.source ?? null,
+    // Vrai dès qu'une source a répondu, même sans rien trouver — c'est la
+    // distinction entre « pas de commerce à cinq cents mètres » et « on n'a pas
+    // pu regarder ». La page ne s'en sert plus pour se taire, seulement pour
+    // nuancer sa phrase d'introduction.
+    disponible: poi?.disponible === true,
+    releve: carte.points.length,
+    carte,
+    categories: categories.map((categorie) => ({
       id: categorie.id,
       label: categorie.label,
       total: categorie.total ?? 0,
+      // Une catégorie que la source de repli ne couvre pas ne doit pas se lire
+      // comme un quartier qui en serait dépourvu.
+      horsPortee: categorie.horsPortee === true,
       totalTexte:
-        categorie.total > 0
-          ? `${formatNumber(categorie.total)} à moins de ${formatDistance(poi.rayonM)}`
-          : 'Aucun relevé à proximité immédiate',
+        categorie.horsPortee === true
+          ? 'Non relevé par la source de secours — à compléter'
+          : categorie.total > 0
+            ? `${formatNumber(categorie.total)} à moins de ${formatDistance(rayonM)}`
+            : 'Aucun relevé à proximité immédiate',
       plusProche: formatDistance(categorie.plusProcheM),
       lieux: (categorie.lieux ?? []).map((lieu, index) => ({
         cle: `poi.${categorie.id}.${index}`,
@@ -194,6 +229,60 @@ function commodites(poi, { lat, lon }) {
         distance: formatDistance(lieu.distanceM) ?? '',
       })),
     })),
+  }
+}
+
+/**
+ * Environnement du bien — ce qui l'entoure, plutôt que ce qu'il est.
+ *
+ * Le bloc mêle délibérément deux provenances, et c'est ce qui en fait l'intérêt.
+ * La vue, l'exposition et la luminosité viennent de l'agent, qui a visité ;
+ * le niveau sonore, le littoral et les espaces boisés viennent des référentiels
+ * IGN, qui mesurent des distances mieux qu'un souvenir de visite ; les trois
+ * accès viennent du relevé de commodités, dont ils ne sont qu'une lecture — la
+ * page précédente dit « école à 210 m », celle-ci dit ce que cela vaut.
+ *
+ * Rien n'est inventé pour combler : un champ que personne n'a renseigné et
+ * qu'aucune source ne connaît descend à `null`, et la page écrit « Non
+ * renseigné » — modifiable, comme tout le reste du rapport.
+ *
+ * Une seule composition : la vue déclarée et le trait de côte se rejoignent en
+ * une ligne, « Dégagée, mer ». C'est la forme sous laquelle un agent l'écrirait,
+ * et il n'y a aucune raison de la lui faire assembler à la main.
+ */
+function environnement(env, c = {}, poi = null) {
+  const acces = (id) => {
+    const categorie = (poi?.categories ?? []).find((entree) => entree.id === id)
+    return qualifierAcces(categorie)
+  }
+
+  const vueDeclaree = VUE_LABELS[c.vue] ?? null
+  const vueMer = env?.littoral?.vue === 'mer'
+  const vues = [vueDeclaree, vueMer ? 'mer' : null].filter(Boolean).join(', ') || null
+
+  const lignes = [
+    champ('env.vues', 'Vues', vues),
+    champ('env.exposition', 'Exposition principale', EXPOSITION_LABELS[c.exposition] ?? null),
+    champ('env.luminosite', 'Luminosité', LUMINOSITE_LABELS[c.luminosite] ?? null),
+    champ('env.sonore', 'Niveau sonore', env?.sonore?.niveau ?? null),
+    // Libellés volontairement courts : le bloc est présenté en trois colonnes
+    // sur une feuille A4 de 178 mm utiles, et « Accès commerces de proximité »
+    // y passait à la ligne deux fois. « De proximité » est de toute façon dit
+    // par le titre du bloc et par la page des commodités qui précède.
+    champ('env.ecoles', 'Accès écoles', acces('ecoles')),
+    champ('env.commerces', 'Accès commerces', acces('commerces')),
+    champ('env.transports', 'Accès transports', acces('transports')),
+    champ('env.littoral', 'Littoral', env?.littoral?.proximite ?? null),
+    champ('env.verdure', 'Espaces verts', env?.espacesVerts ?? null),
+  ]
+
+  return {
+    lignes,
+    // Le motif du niveau sonore, imprimé en aparté sous le bloc : « Passant »
+    // seul est un jugement, « Passant — axe routier structurant à moins de
+    // 150 m » est un constat que l'agent peut confirmer ou corriger.
+    motifSonore: env?.sonore?.motif ?? null,
+    source: env?.source ?? null,
   }
 }
 
@@ -238,6 +327,7 @@ function agence() {
     coordonnees: [
       champ('agence.adresse', 'Adresse', AGENCE.adresse),
       champ('agence.ville', 'Code postal et ville', ville),
+      champ('agence.adresse2', 'Second bureau', AGENCE.adresseSecondaire),
       champ('agence.telephone', 'Téléphone', AGENCE.telephone),
       champ('agence.email', 'Courriel', AGENCE.email),
       champ('agence.site', 'Site', AGENCE.siteWeb),
@@ -297,6 +387,65 @@ function quartier(q) {
       valeur: point.valeur,
       label: formatNumber(point.valeur),
     })),
+  }
+}
+
+/**
+ * Repères de marché du territoire du livre foncier — Alsace-Moselle.
+ *
+ * Prend la place des statistiques DVF sur les trois départements où celles-ci
+ * n'existeront jamais, et ne prétend pas les remplacer : trois prix au m² de
+ * référence, l'indice communal qui les a écartés du niveau départemental, et
+ * l'énoncé de la méthode. Pas d'évolution, pas d'historique, pas de médiane —
+ * il n'y a pas de transactions à dater (voir `api/_lib/alsaceMoselle.js`).
+ *
+ * Les trois textes du bas ne sont pas de l'habillage : ils disent d'où vient
+ * le chiffre, comment il a été obtenu et ce qu'il vaut. Un repère présenté
+ * comme une statistique de marché serait un faux, et c'est l'agent qui aurait
+ * à le défendre devant son vendeur.
+ */
+function reperes(r) {
+  if (!r) return null
+
+  const index = r.indice
+
+  return {
+    territoire: r.territoire,
+    departement: r.departementNom,
+    commune: r.commune,
+    prix: [
+      champ('reperes.maison', 'Maison', parM2(r.prixM2?.maison)),
+      champ('reperes.appartement', 'Appartement', parM2(r.prixM2?.appartement)),
+      champ('reperes.terrain', 'Terrain à bâtir', parM2(r.prixM2?.terrain)),
+    ],
+    indice: index
+      ? [
+          champ(
+            'reperes.indice',
+            'Indice de la commune',
+            `${formatNumber(Math.round(index.indice * 100))} % du niveau départemental`,
+          ),
+          champ(
+            'reperes.revenu',
+            'Niveau de vie médian',
+            index.commune?.revenuAnnuel == null
+              ? null
+              : `${formatEuros(Math.round(index.commune.revenuAnnuel / 12))} / mois`,
+          ),
+          champ(
+            'reperes.revenuDep',
+            'Niveau de vie du département',
+            index.departement?.revenuAnnuel == null
+              ? null
+              : `${formatEuros(Math.round(index.departement.revenuAnnuel / 12))} / mois`,
+          ),
+          champ('reperes.population', 'Population de la commune', entier(index.commune?.population)),
+        ]
+      : [],
+    motif: r.motif ?? null,
+    methode: r.methode ?? null,
+    precision: r.precision ?? null,
+    source: r.source ?? null,
   }
 }
 
@@ -531,11 +680,19 @@ export function construireModele({
     description: {
       ...caracteristiques(characteristics ?? {}),
       ...points(rapport?.points),
+      environnement: environnement(
+        rapport?.environnement,
+        characteristics ?? {},
+        rapport?.poi,
+      ),
     },
     photos: photos(characteristics?.photos),
     commodites: commodites(rapport?.poi, { lat, lon }),
     quartier: quartier(rapport?.quartier),
     marche: marche(rapport?.marche, rapport?.zone),
+    // Non nul sur les seuls départements du livre foncier. Les pages chiffrées
+    // s'en servent comme d'un substitut annoncé, jamais comme d'un complément.
+    reperes: reperes(rapport?.reperes),
     budgets: budgets(rapport?.budgets, rapport?.zone),
     historique: historique(rapport?.historique, rapport?.zone),
     comparables: comparables(rapport?.comparables),

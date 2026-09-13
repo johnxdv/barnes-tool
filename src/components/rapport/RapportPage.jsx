@@ -1,5 +1,6 @@
 import { LogoBarnes } from '../ui/LogoBarnes'
 import { ChampModifiable, NON_RENSEIGNE } from './Edition'
+import { AngleBarnes, TrameEntete } from './Motifs'
 
 /**
  * Habillage commun aux pages du rapport — et le seul endroit où se décide ce
@@ -42,24 +43,35 @@ export function PageRapport({ numero, surtitre, titre, couverture = false, child
       <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-barnes" />
 
       {/* L'écusson, en haut à droite de chaque feuille. Posé en absolu plutôt
-          que dans le flux : toutes les pages n'ont pas d'en-tête — la
-          couverture n'en a pas — et il doit tomber au même endroit sur les
-          onze. Les décalages reprennent exactement le rembourrage de
-          `.rapport-page` (voir `index.css`), ce qui l'aligne sur la marge du
-          texte.
+          que dans le flux : toutes les pages n'ont pas d'en-tête et il doit
+          tomber au même endroit sur les dix. Les décalages reprennent
+          exactement le rembourrage de `.rapport-page` (voir `index.css`), ce
+          qui l'aligne sur la marge du texte.
 
           Le `pr-16` de l'en-tête ci-dessous est sa contrepartie : sans lui, un
-          titre long passerait dessous. */}
-      <LogoBarnes className="absolute right-8 top-8 h-11 w-11 sm:right-11 sm:top-11 sm:h-12 sm:w-12" />
+          titre long passerait dessous.
+
+          La couverture en est exemptée : elle porte le sien, en grand et dans
+          le flux, sous la signature. Les deux à la fois feraient deux écussons
+          à trente millimètres d'écart. */}
+      {couverture ? null : (
+        <LogoBarnes className="absolute right-8 top-8 h-11 w-11 sm:right-11 sm:top-11 sm:h-12 sm:w-12" />
+      )}
 
       {titre ? (
-        <header className="mb-7 shrink-0 pr-16">
+        <header className="relative mb-7 shrink-0 pr-16">
+          {/* La trame oblique du surtitre — presque invisible page par page, et
+              c'est le but : ce qu'on doit remarquer, c'est que les feuilles
+              appartiennent au même document (voir `Motifs.jsx`). */}
+          <TrameEntete className="absolute -left-1 -top-1 h-6 w-32" />
           {surtitre ? (
-            <p className="font-mono text-[0.58rem] uppercase tracking-micro text-barnes">
+            <p className="relative font-mono text-[0.58rem] uppercase tracking-micro text-barnes">
               {surtitre}
             </p>
           ) : null}
-          <h2 className="mt-2 font-display text-[1.6rem] leading-tight text-marine">{titre}</h2>
+          <h2 className="relative mt-2 font-display text-[1.6rem] leading-tight text-marine">
+            {titre}
+          </h2>
           <FiletTitre />
         </header>
       ) : null}
@@ -69,9 +81,17 @@ export function PageRapport({ numero, surtitre, titre, couverture = false, child
       </div>
 
       {numero ? (
-        <footer className="mt-6 flex shrink-0 items-center justify-between border-t border-marine/10 pt-3 font-mono text-[0.55rem] uppercase tracking-micro text-marine/35">
-          <span>Barnes — Avis de valeur</span>
-          <span>{String(numero).padStart(2, '0')}</span>
+        <footer className="mt-6 flex shrink-0 items-center justify-between gap-4 border-t border-marine/10 pt-3 font-mono text-[0.55rem] uppercase tracking-micro text-marine/35">
+          <span className="flex items-center gap-2">
+            <span aria-hidden="true" className="block h-[2px] w-4 rounded-full bg-barnes" />
+            Barnes — Avis de valeur
+          </span>
+          {/* Le numéro dans une pastille rouge plutôt qu'en gris pâle : c'est le
+              repère qu'on cherche en feuilletant un document imprimé, et il
+              était jusqu'ici le caractère le plus discret de la page. */}
+          <span className="flex h-[1.15rem] min-w-[1.15rem] items-center justify-center rounded-full bg-barnes px-1.5 text-white">
+            {String(numero).padStart(2, '0')}
+          </span>
         </footer>
       ) : null}
     </article>
@@ -135,17 +155,33 @@ export function Section({ titre, aparte, children, className = '' }) {
  * avis de valeur, c'est un chiffre ou une mention, jamais le nom de la ligne —
  * et rendre les deux modifiables ferait deux fois plus de zones cliquables pour
  * une utilité nulle.
+ *
+ * ── L'interligne, et pourquoi il a été resserré ───────────────────────────
+ *
+ * Chaque ligne respirait de 0,42 rem au-dessus et au-dessous. C'était juste sur
+ * une page de six champs, et c'était trop dès qu'une feuille en portait vingt-
+ * cinq : la page de description, une fois dotée de son bloc « environnement »,
+ * dépassait la hauteur d'un A4 d'environ un sixième — et une feuille qui
+ * déborde ne s'imprime pas plus serrée, elle s'imprime sur deux feuilles, dont
+ * la seconde ne porte que trois lignes.
+ *
+ * Le retrait de deux dixièmes de rem par ligne ne se voit pas ; sur vingt-cinq
+ * lignes il rend cent pixels, c'est-à-dire la place du bloc ajouté. Le filet de
+ * séparation, lui, est conservé : c'est lui, plus que l'espace, qui sépare deux
+ * lignes.
  */
+const GRILLE_COLONNES = { 1: '', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3' }
+
 export function ListeChamps({ champs, colonnes = 1 }) {
   return (
     <dl
-      className={`grid gap-x-6 ${colonnes === 2 ? 'sm:grid-cols-2' : ''}`}
+      className={`grid gap-x-6 ${GRILLE_COLONNES[colonnes] ?? ''}`}
       style={{ gridAutoRows: 'min-content' }}
     >
       {champs.map((champ) => (
         <div
           key={champ.id}
-          className="flex items-baseline justify-between gap-3 border-b border-marine/8 py-[0.42rem]"
+          className="flex items-baseline justify-between gap-3 border-b border-marine/8 py-[0.26rem]"
         >
           <dt className="shrink-0 text-[0.76rem] leading-snug text-marine/55">{champ.label}</dt>
           <dd className="min-w-0 text-right">
@@ -164,14 +200,20 @@ export function ListeChamps({ champs, colonnes = 1 }) {
 /**
  * Chiffre mis en avant — un par bloc, jamais plus : c'est ce qui distingue une
  * page de rapport d'un tableau de bord.
+ *
+ * L'équerre rouge de l'angle supérieur droit ne dit rien : elle signe. Elle
+ * n'est posée que sur ces blocs-là, qui portent les chiffres qu'on regarde en
+ * premier — un ornement présent partout cesserait de désigner quoi que ce
+ * soit (voir `Motifs.jsx`).
  */
 export function Statistique({ cle, label, valeur, note, accent = false }) {
   return (
     <div
-      className={`rounded-lg border px-4 py-3.5 ${
+      className={`relative overflow-hidden rounded-lg border px-4 py-3.5 ${
         accent ? 'border-corail/30 bg-corail/[0.06]' : 'border-marine/12 bg-marine/[0.03]'
       }`}
     >
+      <AngleBarnes className="right-2 top-2 rotate-90" taille={11} />
       <p className="font-mono text-[0.55rem] uppercase tracking-micro text-marine/45">{label}</p>
       <ChampModifiable
         cle={cle}

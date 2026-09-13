@@ -135,7 +135,7 @@ export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress
       </button>
 
       <h1 className="text-center font-display text-[1.6rem] font-semibold leading-tight text-ink sm:text-[2rem]">
-        Cliquez sur votre bien
+        Cliquez sur le bien.
       </h1>
       <p className="mx-auto mt-4 max-w-md text-center text-[0.95rem] leading-relaxed text-ink/55">
         Sur la vue aérienne, sélectionnez le bâtiment concerné.

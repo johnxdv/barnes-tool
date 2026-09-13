@@ -109,8 +109,8 @@ export async function requestEstimation(selection) {
     surfaceM2: selection.surfaceM2 ?? null,
     // Le formulaire de caractéristiques, quand il a été rempli — absent au
     // premier appel, qui le précède. Le serveur en tire les ajustements de prix
-    // (état général, classe énergie, piscine, stationnements ; voir
-    // `api/_lib/ajustements.js`). Les photos en sont retirées : aucun calcul ne
+    // (état général, classe énergie, standing, étage, piscine, stationnements ;
+    // voir `api/_lib/ajustements.js`). Les photos en sont retirées : aucun calcul ne
     // les regarde, et elles se compteraient en mégaoctets sur la requête.
     characteristics: sansPhotos(selection.characteristics ?? null),
     // Parcelle cadastrale et fiche BDNB ont déjà été obtenues pour déterminer

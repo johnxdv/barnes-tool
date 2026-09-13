@@ -1,4 +1,4 @@
-import { LOGO_BARNES_SRC } from '../ui/LogoBarnes'
+import { ENCRE, Trait } from './encre'
 
 /**
  * Scène d'attente de l'écran d'analyse — un dessin à l'encre qui se fait sous
@@ -26,14 +26,32 @@ import { LOGO_BARNES_SRC } from '../ui/LogoBarnes'
  *   0,8 s  la tour sort du sol
  *   2,3 s  ses planchers, du bas vers le haut
  *   3,4 s  le monogramme « B » se pose au sommet
- *   2,6 s  la maison — toit puis murs — en parallèle, comme demandé
- *   4,2 s  le bassin se creuse devant elle
- *   5,4 s  l'écusson se pose au fond du bassin
+ *   2,6 s  la villa — dalles, puis volumes, en parallèle de la tour
+ *   3,9 s  ses vitrages et ses poteaux
+ *   4,4 s  le bassin à débordement se creuse devant elle
+ *   5,3 s  les cyprès
  *   5,6 s  l'eau se met à onduler, et c'est le seul élément qui boucle
  *
  * Soit un dessin achevé à six secondes, sur une analyse qui en dure douze
  * (`ANALYSIS_STEPS`) : la seconde moitié se regarde comme une estampe finie,
  * l'eau seule y bougeant encore.
+ *
+ * ── Ce qui a changé, et pourquoi ──────────────────────────────────────────
+ *
+ * La maison était un pignon triangulaire sur un rectangle, avec une porte et
+ * une fenêtre — le dessin qu'on fait à cinq ans. Sur un outil qui estime des
+ * biens de prestige, à côté d'une tour à degrés, elle tirait toute la scène
+ * vers le bas. Elle a cédé la place à une villa contemporaine : deux volumes
+ * décalés, un étage en porte-à-faux sur poteaux, des baies toute hauteur, une
+ * terrasse et un bassin à débordement.
+ *
+ * Le bassin, justement, était une ellipse au fond de laquelle se posait
+ * l'écusson. Les deux sont partis. L'écusson d'abord : un logo au fond de
+ * l'eau ne se lit pas comme une signature, il se lit comme un objet tombé
+ * dedans — et il faisait doublon avec celui qui coiffe la tour, à quinze
+ * centimètres de là. L'ellipse ensuite : un bassin de villa contemporaine est
+ * rectangulaire, et le trapèze en perspective se lit mieux qu'un ovale posé à
+ * plat.
  *
  * `pathLength="1"` sur chaque tracé : l'attribut renormalise les longueurs, ce
  * qui permet à une façade de vingt unités et à un bassin de trois cents d'être
@@ -51,34 +69,13 @@ import { LOGO_BARNES_SRC } from '../ui/LogoBarnes'
  * veut d'un dessin dont on refuse le mouvement.
  */
 
-/** Rouge Barnes, décliné en trois intensités — l'encre plus ou moins chargée. */
-const ENCRE = '#B4002F'
-
-/** Un trait : sa forme, son épaisseur, et le moment où le pinceau le pose. */
-function Trait({ d, duree, retard, largeur = 1.6, opacite = 1, couleur = ENCRE }) {
-  return (
-    <path
-      d={d}
-      pathLength="1"
-      className="trace-encre"
-      style={{ '--duree': `${duree}s`, '--retard': `${retard}s` }}
-      fill="none"
-      stroke={couleur}
-      strokeWidth={largeur}
-      strokeOpacity={opacite}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  )
-}
-
 export function SceneEncre({ className = '' }) {
   return (
     <svg
       viewBox="0 0 340 200"
       className={className}
       role="img"
-      aria-label="Dessin à l’encre d’un immeuble et d’une maison avec piscine, en cours de tracé"
+      aria-label="Dessin à l’encre d’une tour Barnes et d’une villa contemporaine avec bassin, en cours de tracé"
     >
       {/* Ligne d'horizon — le sol d'où tout sort. Tracée de gauche à droite,
           d'un seul geste, et volontairement pas droite : deux légères inflexions
@@ -156,50 +153,102 @@ export function SceneEncre({ className = '' }) {
         B
       </text>
 
-      {/* --- La maison ----------------------------------------------------
-          Toit d'abord, d'un versant à l'autre en passant par le faîte ; puis
-          les murs, montés depuis le sol de part et d'autre. */}
-      <Trait d="M 34 106 L 82 74 L 130 106" duree={0.85} retard={2.6} largeur={2} />
-      <Trait d="M 44 142 L 44 102" duree={0.5} retard={3.3} largeur={1.7} />
-      <Trait d="M 120 142 L 120 102" duree={0.5} retard={3.45} largeur={1.7} />
-      <Trait d="M 44 142 L 120 142" duree={0.5} retard={3.6} largeur={1.7} />
+      {/* --- La villa ------------------------------------------------------
+          Deux volumes décalés plutôt qu'un pignon sur un rectangle. L'ordre du
+          tracé est celui du chantier : la dalle basse, les murs du rez, la
+          dalle intermédiaire qui déborde en porte-à-faux, le volume de
+          l'étage, la toiture-terrasse. Chaque dalle est tracée de gauche à
+          droite, chaque mur du sol vers le haut. */}
 
-      {/* Porte et fenêtre — le détail qui fait qu'on lit « maison » et non
-          « triangle sur rectangle ». */}
-      <Trait d="M 74 142 L 74 118 L 92 118 L 92 142" duree={0.55} retard={3.9} largeur={1.2} opacite={0.65} />
-      <Trait d="M 54 112 L 68 112 L 68 126 L 54 126 Z" duree={0.5} retard={4.05} largeur={1.1} opacite={0.5} />
+      {/* Dalle basse et terrasse — elle dépasse largement les murs des deux
+          côtés : c'est ce débord qui fait lire « terrasse » et non « socle ». */}
+      <Trait d="M 20 142 L 146 142.6" duree={0.7} retard={2.6} largeur={1.9} />
 
-      {/* --- Le bassin ----------------------------------------------------
-          Creusé d'un seul tour de pinceau, en deux arcs de cercle qui se
-          referment : c'est le geste qu'on ferait à la main, et il se lit mieux
-          qu'une `<ellipse>` — laquelle ne se trace pas, faute de point de
-          départ. Le tracé part de la gauche et fait le tour par le bas. */}
+      {/* Volume du rez-de-chaussée, en retrait à droite pour laisser voir les
+          poteaux de l'étage. */}
+      <Trait d="M 34 142 L 34 102" duree={0.5} retard={3.05} largeur={1.8} />
+      <Trait d="M 110 142 L 110 102" duree={0.5} retard={3.15} largeur={1.6} opacite={0.8} />
+
+      {/* Dalle intermédiaire — la plus longue du dessin, et celle qui donne sa
+          silhouette à la villa : elle sort de vingt unités au-delà du volume du
+          bas, en porte-à-faux au-dessus de la terrasse. */}
+      <Trait d="M 26 102 L 140 102.5" duree={0.75} retard={3.3} largeur={2} />
+
+      {/* Volume de l'étage, décalé vers la droite par rapport au rez : c'est ce
+          décalage qui remplace la symétrie du pignon. */}
+      <Trait d="M 48 102 L 48 64" duree={0.5} retard={3.55} largeur={1.8} />
+      <Trait d="M 136 102 L 136 64" duree={0.5} retard={3.62} largeur={1.8} />
+      <Trait d="M 42 64 L 144 64.4" duree={0.6} retard={3.7} largeur={2} />
+
+      {/* Poteaux du porte-à-faux — deux traits fins qui descendent de la dalle
+          jusqu'à la terrasse. Sans eux, l'étage flotte. */}
+      <Trait d="M 122 102 L 122 142" duree={0.4} retard={3.9} largeur={0.9} opacite={0.6} />
+      <Trait d="M 133 102 L 133 142" duree={0.4} retard={3.96} largeur={0.9} opacite={0.6} />
+
+      {/* Les baies : des meneaux verticaux plutôt que des carreaux, parce que
+          c'est ainsi qu'on dessine une façade toute hauteur — et parce que
+          quatre traits valent mieux que douze petits rectangles à cette
+          échelle. */}
+      {[46, 60, 74, 88, 102].map((x, index) => (
+        <Trait
+          key={`rez-${x}`}
+          d={`M ${x} 138 L ${x} 107`}
+          duree={0.28}
+          retard={3.95 + index * 0.05}
+          largeur={0.8}
+          opacite={0.4}
+        />
+      ))}
+      {[60, 76, 92, 108, 124].map((x, index) => (
+        <Trait
+          key={`etage-${x}`}
+          d={`M ${x} 98 L ${x} 70`}
+          duree={0.26}
+          retard={4.1 + index * 0.05}
+          largeur={0.8}
+          opacite={0.4}
+        />
+      ))}
+
+      {/* Le garde-corps de la terrasse haute, et la rambarde du porte-à-faux —
+          deux filets horizontaux qui posent l'échelle du bâtiment. */}
+      <Trait d="M 26 96 L 44 96" duree={0.3} retard={4.2} largeur={0.9} opacite={0.5} />
+      <Trait d="M 42 60 L 144 60.3" duree={0.5} retard={4.25} largeur={0.9} opacite={0.45} />
+
+      {/* --- Le bassin à débordement ---------------------------------------
+          Un trapèze plutôt qu'une ellipse : vu depuis la terrasse, un bassin
+          rectangulaire fuit vers le fond, et c'est cette fuite qui donne sa
+          profondeur à la scène. Tracé d'un seul geste, en partant de l'angle
+          proche gauche. */}
       <Trait
-        d="M 52 168 A 48 13 0 0 0 148 168 A 48 13 0 0 0 52 168 Z"
-        duree={1.2}
-        retard={4.2}
+        d="M 26 186 L 48 152 L 128 152 L 158 186 Z"
+        duree={1.1}
+        retard={4.4}
         largeur={1.8}
       />
 
-      {/* L'écusson au fond de l'eau. Aplati verticalement — il repose à plat
-          sous la surface, et une rondelle parfaite dans un bassin vu en
-          perspective flotterait au-dessus. L'échelle verticale est portée par
-          l'image, l'animation par le groupe : `pose-encre` écrit elle-même un
-          `transform`, et les deux s'écraseraient sur un même nœud. */}
-      <g
-        className="pose-encre"
-        style={{ '--retard': '5.4s', '--duree': '0.9s' }}
-        opacity="0.75"
-      >
-        <image
-          href={LOGO_BARNES_SRC}
-          x="-15"
-          y="-15"
-          width="30"
-          height="30"
-          transform="translate(100 168) scale(1 0.56)"
-        />
-      </g>
+      {/* La margelle du débordement, un filet parallèle au bord lointain : elle
+          suffit à faire lire « débordement » plutôt que « trou d'eau ». */}
+      <Trait d="M 51 148 L 125 148" duree={0.45} retard={5.05} largeur={1} opacite={0.5} />
+
+      {/* --- Les cyprès -----------------------------------------------------
+          Deux fuseaux, montés du sol. Ils donnent l'échelle de la villa et
+          plantent la scène en Provence — une villa contemporaine sans un arbre
+          pourrait être n'importe où. */}
+      <Trait
+        d="M 12 142 C 4 116, 9 88, 13 76 C 18 92, 22 118, 16 142"
+        duree={0.6}
+        retard={5.3}
+        largeur={1.2}
+        opacite={0.7}
+      />
+      <Trait
+        d="M 158 142 C 152 120, 156 100, 160 90 C 165 102, 168 122, 163 142"
+        duree={0.55}
+        retard={5.45}
+        largeur={1.1}
+        opacite={0.55}
+      />
 
       {/* La surface. Deux traits d'eau qui s'étirent et se rétractent en
           décalé — seule boucle de la scène, et la seule chose qui bouge encore
@@ -213,7 +262,7 @@ export function SceneEncre({ className = '' }) {
           rideau — ce qui les fait arriver déjà désynchronisées. */}
       <g className="pose-encre" style={{ '--retard': '5.6s', '--duree': '0.6s' }}>
         <path
-          d="M 60 161 q 7 -3 14 0 t 14 0"
+          d="M 62 164 q 7 -3 14 0 t 14 0"
           fill="none"
           stroke={ENCRE}
           strokeWidth="1"
@@ -221,7 +270,7 @@ export function SceneEncre({ className = '' }) {
           className="onde-bassin"
         />
         <path
-          d="M 112 175 q 7 -3 14 0 t 14 0"
+          d="M 104 176 q 7 -3 14 0 t 14 0"
           fill="none"
           stroke={ENCRE}
           strokeWidth="1"

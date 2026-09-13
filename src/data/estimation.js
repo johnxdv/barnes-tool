@@ -12,16 +12,31 @@ export const ANALYSIS_STEPS = [
 ]
 
 /**
- * Repères de marché affichés pendant l'attente. Volontairement factuels et
- * vérifiables — un chiffre inventé pendant une estimation décrédibiliserait
- * tout le parcours.
+ * Ce qui défile pendant l'attente de l'analyse.
+ *
+ * C'étaient des repères de marché — le DPE, la base DVF, l'effet d'une
+ * surévaluation. Exacts, mais interchangeables : la même phrase aurait pu
+ * s'afficher sur l'outil de n'importe quel réseau. Ce sont désormais des faits
+ * sur la maison qui édite l'avis de valeur, relevés sur ses propres pages
+ * (`barnes-international.com`, `barnes-provence-littoral.com`) et au registre
+ * du commerce.
+ *
+ * La règle qui gouvernait la liste précédente n'a pas bougé, elle est même plus
+ * contraignante ici : **rien d'inventé**. Une date de fondation approximative
+ * ou un effectif arrondi à la louche, sur un écran qui porte le nom de la
+ * marque, se remarquent immédiatement — et le premier à s'en apercevoir sera
+ * l'agent qui présente l'outil. Chaque phrase ci-dessous se vérifie à la
+ * source.
  */
 export const DID_YOU_KNOW = [
-  'Depuis 2025, les logements classés G au DPE ne peuvent plus être proposés à la location nue en France métropolitaine.',
-  'Le diagnostic de performance énergétique est valable dix ans, mais il doit être refait après des travaux de rénovation importants.',
-  'Deux biens identiques peuvent se négocier très différemment d’une rue à l’autre : l’emplacement reste le premier critère de valeur.',
-  'Les transactions immobilières sont publiques : la base DVF recense les ventes des cinq dernières années, adresse par adresse.',
-  'Un bien correctement estimé dès la mise en vente se vend en moyenne bien plus vite qu’un bien surévalué puis rebaissé.',
+  'BARNES a été fondée en 1995 par Heidi Barnes, à Paris et à Londres, pour accompagner une clientèle internationale en quête d’une adresse dans les deux capitales.',
+  'C’est sous l’impulsion de Thibault de Saint Vincent, son président, que la maison a entamé son déploiement international à partir de 2004.',
+  'BARNES réunit aujourd’hui plus de 1 800 collaborateurs, présents dans plus de cent destinations dans le monde.',
+  'Excellence, élégance et confiance : les trois valeurs que la maison met en avant, et qu’elle résume d’une formule — ambassadrice de l’art de vivre.',
+  'BARNES Provence Littoral compte six agences, d’Eygalières au Lavandou : Aix-en-Provence, Alpilles & Luberon, Marseille, Cassis, Sanary et Le Lavandou.',
+  'BARNES s’est implantée à Marseille en 2018, puis a ouvert un bureau à la Pointe Rouge avant de s’installer rue Paradis, l’une des adresses les plus emblématiques de la ville.',
+  'Depuis 2018, le métier de la maison dépasse la transaction : conseil en art, yachting, aviation privée, domaines viticoles et propriétés de chasse.',
+  'En 2024, BARNES est entrée dans l’hôtellerie avec Maison BARNES New York, ouverte aux côtés du chef Daniel Boulud.',
 ]
 
 /**

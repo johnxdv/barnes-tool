@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { Minus, Plus, RotateCcw, TrendingDown, TrendingUp } from 'lucide-react'
 import { ChampModifiable, OutilLigne, useEdition } from './Edition'
+import { LogoBarnes } from '../ui/LogoBarnes'
 import {
   BlocIndisponible,
   CelluleModifiable,
@@ -11,6 +12,7 @@ import {
   Statistique,
 } from './RapportPage'
 import { Barres, Courbe, Repartition } from './RapportCharts'
+import { AngleBarnes, MotifCouverture } from './Motifs'
 
 /**
  * Les pages de l'avis de valeur.
@@ -67,10 +69,35 @@ function Tendance({ sens, className = 'h-3.5 w-3.5' }) {
 
 // --- 1. Couverture ---------------------------------------------------------
 
+/**
+ * La couverture — la seule page du document qu'on regarde avant de la lire.
+ *
+ * Elle ne portait qu'un mot, une adresse, une date et beaucoup de blanc. Le
+ * texte était juste ; la page ne ressemblait à rien qu'une agence remette à un
+ * vendeur. Ce qui a changé tient en trois choses, et aucune n'ajoute une seule
+ * information :
+ *
+ *  - **Une composition graphique** (voir `MotifCouverture`) : arcs concentriques
+ *    coupés par le bord de la feuille, trame oblique dans l'angle, bandeau plein
+ *    en pied. Elle donne à la page une diagonale et un cadre.
+ *  - **Un bloc de titre posé sur un aplat**, plutôt que flottant : l'adresse est
+ *    le sujet du document, elle doit avoir un support.
+ *  - **L'écusson en grand**, une fois, et à sa place — sous la marque, au-dessus
+ *    du titre. Les dix autres pages le portent en vignette dans l'angle ; ici
+ *    il ouvre le document.
+ *
+ * Tous les champs restent modifiables comme avant : le décor est autour, jamais
+ * dessous.
+ */
 export function PageCouverture({ couverture }) {
   return (
     <PageRapport couverture>
-      <div className="flex flex-1 flex-col justify-between py-4">
+      <MotifCouverture />
+
+      {/* `relative` : le contenu repasse au-dessus de la composition, qui est
+          posée en absolu sur toute la feuille. Sans cela, la trame de l'angle
+          supérieur droit recouvrirait la signature. */}
+      <div className="relative flex flex-1 flex-col justify-between py-4">
         <div>
           {/* La signature. `tracking-embleme` (3 px) est la plus forte des trois
               valeurs d'interlettrage relevées sur le site, et elle n'est
@@ -78,44 +105,55 @@ export function PageCouverture({ couverture }) {
               document. */}
           <p className="font-mono text-[0.62rem] uppercase tracking-embleme text-barnes">Barnes</p>
           <span aria-hidden="true" className="mt-5 block h-[2px] w-16 rounded-full bg-barnes" />
+
+          {/* L'écusson en grand, sous la signature — le seul endroit du rapport
+              où il dépasse la vignette d'angle. Il est masqué à cet endroit sur
+              les autres pages par le rembourrage de la couverture (`pr-16`),
+              qui écarte le titre de la vignette posée par `PageRapport`. */}
+          <LogoBarnes className="mt-7 h-20 w-20" alt="" />
         </div>
 
         <div>
-          <ChampModifiable
-            cle="couverture.mention"
-            valeur="Avis de valeur"
-            as="p"
-            className="font-mono text-[0.62rem] uppercase tracking-micro text-brass"
-          />
-          <ChampModifiable
-            cle="couverture.adresse"
-            valeur={couverture.adresse}
-            as="h1"
-            multiligne
-            className="mt-5 block font-display text-[2.5rem] font-semibold leading-[1.08] text-marine"
-          />
-          {couverture.ville ? (
-            <ChampModifiable
-              cle="couverture.ville"
-              valeur={couverture.ville}
-              as="p"
-              className="mt-3 block font-display text-[1.15rem] font-normal text-marine/55"
-            />
-          ) : null}
+          {/* Le bloc de titre, posé sur un aplat très clair bordé à gauche d'un
+              trait rouge plein : c'est ce trait qui ancre l'adresse dans la
+              page, là où elle flottait au milieu du blanc. */}
+          <div className="relative border-l-[3px] border-barnes bg-barnes/[0.045] py-5 pl-6 pr-4">
+            <AngleBarnes className="right-2 top-2 rotate-90" />
 
-          <span aria-hidden="true" className="mt-8 block h-px w-full bg-marine/12" />
+            <ChampModifiable
+              cle="couverture.mention"
+              valeur="Avis de valeur"
+              as="p"
+              className="font-mono text-[0.62rem] uppercase tracking-micro text-barnes"
+            />
+            <ChampModifiable
+              cle="couverture.adresse"
+              valeur={couverture.adresse}
+              as="h1"
+              multiligne
+              className="mt-4 block font-display text-[2.4rem] font-semibold leading-[1.08] text-marine"
+            />
+            {couverture.ville ? (
+              <ChampModifiable
+                cle="couverture.ville"
+                valeur={couverture.ville}
+                as="p"
+                className="mt-2.5 block font-display text-[1.15rem] font-normal text-marine/55"
+              />
+            ) : null}
+          </div>
 
           <ChampModifiable
             cle="couverture.chapeau"
             valeur="Estimation établie à partir des ventes réalisées dans le secteur, des caractéristiques déclarées du bien et des données publiques du marché immobilier."
             as="p"
             multiligne
-            className="mt-6 block max-w-md text-[0.85rem] leading-relaxed text-marine/60"
+            className="mt-7 block max-w-md pl-6 text-[0.85rem] leading-relaxed text-marine/60"
           />
         </div>
 
         <div className="flex items-end justify-between gap-6">
-          <div>
+          <div className="border-l-[3px] border-barnes/40 pl-4">
             <p className="font-mono text-[0.55rem] uppercase tracking-micro text-marine/40">
               Établi le
             </p>
@@ -290,7 +328,60 @@ export function PageDescription({ description, numero }) {
         </Section>
       </div>
 
-      <div className="mt-7 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+      {/* Le cadre, entre ce que le bien est et ce qu'on en pense.
+
+          Trois colonnes plutôt que deux : neuf lignes courtes rangées deux par
+          deux pousseraient les points forts hors de la feuille, et aucune de
+          ces valeurs n'est assez longue pour réclamer une demi-largeur.
+
+          Le fond légèrement teinté distingue ce bloc de ses voisins, et il le
+          faut : c'est le seul de la page dont les valeurs ne viennent pas
+          toutes de la même main — trois sont déclarées par l'agent, six sont
+          relevées (voir `environnement` dans `rapportModele.js`). */}
+      <Section titre="Environnement du bien" className="mt-6">
+        {/* Neuf vignettes plutôt que neuf lignes.
+
+            Le couple libellé / valeur en vis-à-vis, employé partout ailleurs
+            dans le rapport, ne tient pas ici : à trois colonnes sur une feuille
+            A4, chaque cellule fait cinquante-cinq millimètres, et un libellé
+            qui doit partager cette largeur avec sa valeur passe à la ligne deux
+            fois. Le bloc gagnait alors quatre-vingts millimètres, et la page
+            débordait sur une seconde feuille pour trois lignes.
+
+            Empilés — libellé au-dessus, valeur au-dessous —, les mêmes neuf
+            champs tiennent en trois rangs. Le filet rouge à gauche de chaque
+            vignette remplace le trait de séparation horizontal des listes : il
+            faut bien quelque chose pour découper la grille, et une bordure
+            complète en ferait un tableau. */}
+        <div className="grid grid-cols-2 gap-x-5 gap-y-2.5 sm:grid-cols-3">
+          {description.environnement.lignes.map((ligne) => (
+            <div key={ligne.id} className="border-l-2 border-barnes/25 pl-2.5">
+              <p className="font-mono text-[0.5rem] uppercase leading-tight tracking-micro text-marine/40">
+                {ligne.label}
+              </p>
+              <ChampModifiable
+                cle={ligne.id}
+                valeur={ligne.valeur}
+                as="p"
+                className="mt-0.5 block font-display text-[0.85rem] font-semibold leading-snug text-marine"
+              />
+            </div>
+          ))}
+        </div>
+
+        {description.environnement.motifSonore ? (
+          <p className="mt-2 flex items-baseline gap-2 text-[0.68rem] leading-snug text-marine/45">
+            <span aria-hidden="true" className="mt-[0.3rem] h-1 w-1 shrink-0 rounded-full bg-barnes" />
+            <ChampModifiable
+              cle="env.sonore.motif"
+              valeur={description.environnement.motifSonore}
+              multiligne
+            />
+          </p>
+        ) : null}
+      </Section>
+
+      <div className="mt-6 grid gap-x-8 gap-y-6 sm:grid-cols-2">
         <Section titre="Points forts">
           <ListePoints liste={description.forts} cleListe="points.forts" />
         </Section>
@@ -298,6 +389,12 @@ export function PageDescription({ description, numero }) {
           <ListePoints liste={description.reserves} cleListe="points.reserves" accent="corail" />
         </Section>
       </div>
+
+      {description.environnement.source ? (
+        <p className="mt-auto pt-5 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
+          Environnement relevé d’après {description.environnement.source}
+        </p>
+      ) : null}
     </PageRapport>
   )
 }
@@ -361,92 +458,111 @@ export function PagePhotos({ photos, numero }) {
 
 // --- 4. Points d'intérêt ---------------------------------------------------
 
+/**
+ * La carte est obligatoire, et c'est le seul point qui compte sur cette page.
+ *
+ * Elle ne l'était pas : le relevé en échec faisait disparaître la carte au
+ * profit d'un bloc « à compléter à la main », c'est-à-dire d'une feuille
+ * d'excuse au milieu d'un document remis à un vendeur. Ce repli n'existe plus,
+ * ni ici ni dans le relevé, qui interroge désormais trois sources indépendantes
+ * avant d'abandonner et élargit son rayon plutôt que de rendre une carte nue
+ * (voir `src/lib/poi.js`).
+ *
+ * Reste ce que la carte ne peut pas inventer : un quartier réellement dépourvu
+ * de commerces à cinq cents mètres. La page le dit alors en une phrase, sous
+ * une carte qui, elle, montre toujours le bien, son disque de recherche et les
+ * rues autour — une information juste, plutôt qu'une case vide.
+ */
 export function PageCommodites({ commodites, numero }) {
+  if (!commodites) return null
+
+  const releve = commodites.releve > 0
+
   return (
     <PageRapport numero={numero} surtitre="Environnement" titre="Commodités à proximité">
-      {!commodites || !commodites.disponible ? (
-        <BlocIndisponible
-          cle="poi.absent"
-          message="Le relevé des commodités n’a pas pu être établi. À compléter à la main : écoles, commerces et transports du quartier."
-        />
-      ) : (
-        <>
-          <p className="text-[0.82rem] leading-relaxed text-marine/60">
-            Équipements et services relevés dans un rayon de {commodites.rayon} autour du bien —
-            l’ordre de grandeur de ce qui se fait à pied.
-          </p>
+      <p className="text-[0.82rem] leading-relaxed text-marine/60">
+        {releve ? (
+          <>
+            Équipements et services relevés dans un rayon de{' '}
+            <strong className="font-semibold text-marine">{commodites.rayon}</strong> autour du bien
+            — l’ordre de grandeur de ce qui se fait à pied.
+          </>
+        ) : (
+          <>
+            Aucun équipement n’a été relevé jusqu’à{' '}
+            <strong className="font-semibold text-marine">{commodites.rayon}</strong> du bien : le
+            secteur est à l’écart des commerces et des services du quotidien.
+          </>
+        )}
+      </p>
 
-          {/* La carte d'abord : elle donne la forme du quartier, que les
-              décomptes détaillent ensuite. Absente quand le relevé n'a rien
-              rapporté — un fond de plan sans un point ne dirait rien. */}
-          {commodites.carte ? (
-            <div className="mt-4">
-              {/* Le repli tient la hauteur exacte de la carte : sans lui, les
-                  sections du dessous remonteraient le temps du chargement puis
-                  redescendraient, et l'agent verrait sa page se réorganiser
-                  sous les yeux. */}
-              <Suspense
-                fallback={
-                  <div
-                    className="rapport-carte w-full rounded-lg border border-marine/12 bg-marine/[0.03]"
-                    style={{ height: '250px' }}
-                  />
-                }
-              >
-                <CarteCommodites carte={commodites.carte} />
-              </Suspense>
-            </div>
-          ) : null}
+      {/* La carte d'abord : elle donne la forme du quartier, que les décomptes
+          détaillent ensuite. Le repli du `Suspense` tient sa hauteur exacte —
+          sans lui, les sections du dessous remonteraient le temps du
+          chargement puis redescendraient, et l'agent verrait sa page se
+          réorganiser sous les yeux. */}
+      <div className="mt-3">
+        <Suspense
+          fallback={
+            <div
+              className="rapport-carte mx-auto w-full rounded-lg border border-marine/12 bg-marine/[0.03]"
+              style={{ height: '265px', maxWidth: '23rem' }}
+            />
+          }
+        >
+          <CarteCommodites carte={commodites.carte} source={commodites.attribution} />
+        </Suspense>
+      </div>
 
-          <div className="mt-5 space-y-4">
-            {commodites.categories.map((categorie) => (
-              <Section
-                key={categorie.id}
-                titre={categorie.label}
-                aparte={categorie.plusProche ? `au plus près : ${categorie.plusProche}` : null}
-              >
-                <ChampModifiable
-                  cle={`poi.${categorie.id}.total`}
-                  valeur={categorie.totalTexte}
-                  as="p"
-                  className="block font-display text-[0.95rem] font-semibold text-marine"
-                />
+      {/* Trois catégories serrées sous une carte de soixante-six millimètres :
+          la feuille A4 n'a pas de marge de manœuvre ici, et chaque écart de
+          plus la ferait déborder sur une seconde page pour deux lignes. */}
+      <div className="mt-3 space-y-2">
+        {commodites.categories.map((categorie) => (
+          <Section
+            key={categorie.id}
+            titre={categorie.label}
+            aparte={categorie.plusProche ? `au plus près : ${categorie.plusProche}` : null}
+          >
+            <ChampModifiable
+              cle={`poi.${categorie.id}.total`}
+              valeur={categorie.totalTexte}
+              as="p"
+              className={`block font-display text-[0.95rem] font-semibold ${
+                categorie.total > 0 ? 'text-marine' : 'text-marine/45'
+              }`}
+            />
 
-                {categorie.lieux.length > 0 ? (
-                  <ul className="mt-2.5 space-y-1">
-                    {categorie.lieux.map((lieu) => (
-                      <li
-                        key={lieu.cle}
-                        className="flex items-baseline justify-between gap-3 border-b border-marine/8 py-[0.35rem]"
-                      >
-                        <span className="min-w-0">
-                          <ChampModifiable
-                            cle={`${lieu.cle}.nom`}
-                            valeur={lieu.nom}
-                            className="text-[0.8rem] text-marine/80"
-                          />
-                          <span className="ml-2 font-mono text-[0.58rem] uppercase tracking-micro text-marine/35">
-                            {lieu.type}
-                          </span>
-                        </span>
-                        <ChampModifiable
-                          cle={`${lieu.cle}.distance`}
-                          valeur={lieu.distance}
-                          className="shrink-0 font-mono text-[0.7rem] text-marine/55"
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </Section>
-            ))}
-          </div>
+            {categorie.lieux.length > 0 ? (
+              <ul className="mt-2 space-y-0.5">
+                {categorie.lieux.map((lieu) => (
+                  <li
+                    key={lieu.cle}
+                    className="flex items-baseline justify-between gap-3 border-b border-marine/8 py-[0.22rem]"
+                  >
+                    <span className="min-w-0">
+                      <ChampModifiable
+                        cle={`${lieu.cle}.nom`}
+                        valeur={lieu.nom}
+                        className="text-[0.8rem] text-marine/80"
+                      />
+                      <span className="ml-2 font-mono text-[0.58rem] uppercase tracking-micro text-marine/35">
+                        {lieu.type}
+                      </span>
+                    </span>
+                    <ChampModifiable
+                      cle={`${lieu.cle}.distance`}
+                      valeur={lieu.distance}
+                      className="shrink-0 font-mono text-[0.7rem] text-marine/55"
+                    />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </Section>
+        ))}
+      </div>
 
-          <p className="mt-auto pt-4 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
-            Source : {commodites.attribution}
-          </p>
-        </>
-      )}
     </PageRapport>
   )
 }
@@ -514,15 +630,99 @@ export function PageQuartier({ quartier, numero }) {
   )
 }
 
+// --- Repères Alsace-Moselle ------------------------------------------------
+
+/**
+ * Le substitut du territoire du livre foncier.
+ *
+ * Quatre pages du rapport reposent entièrement sur les Demandes de valeurs
+ * foncières — statistiques, budgets, historique, ventes comparables. En
+ * Moselle, dans le Bas-Rhin et le Haut-Rhin, ces quatre pages sortaient vides,
+ * et pour de bon : le droit local y confie la publicité foncière au livre
+ * foncier, dont les mutations n'entrent dans aucune base ouverte.
+ *
+ * Ce bloc ne comble pas ce vide — rien ne le peut — mais il le remplace par ce
+ * qui est connaissable : un niveau de prix communal, construit sur deux
+ * indicateurs Insee qui, eux, couvrent le territoire (voir
+ * `api/_lib/alsaceMoselle.js`). Il prend la place du bloc « indisponible » sur
+ * la page des statistiques, et se signale sur les trois autres.
+ *
+ * Tout ce qui suit l'encadré est de la mise en garde, et elle est délibérément
+ * longue : c'est l'agent qui présentera ce chiffre, et il doit pouvoir dire
+ * exactement ce qu'il vaut.
+ */
+function BlocReperes({ reperes }) {
+  return (
+    <>
+      <p className="text-[0.82rem] leading-relaxed text-marine/60">
+        Aucune vente n’est publiée pour la{' '}
+        <strong className="font-semibold text-marine">{reperes.departement}</strong>. À défaut de
+        statistiques de transactions, voici les niveaux de prix de référence retenus pour{' '}
+        <strong className="font-semibold text-marine">{reperes.commune ?? 'la commune'}</strong>.
+      </p>
+
+      <Section titre="Prix de référence au m²" className="mt-6">
+        <div className="relative rounded-xl border border-corail/25 bg-corail/[0.04] px-5 pb-2 pt-3">
+          <AngleBarnes className="right-2 top-2 rotate-90" />
+          <ListeChamps champs={reperes.prix} colonnes={3} />
+        </div>
+      </Section>
+
+      {reperes.indice.length > 0 ? (
+        <Section titre="Ce qui situe la commune" className="mt-7">
+          <ListeChamps champs={reperes.indice} colonnes={2} />
+        </Section>
+      ) : null}
+
+      <Section titre="Pourquoi ces chiffres, et non des ventes" className="mt-7">
+        <div className="space-y-2.5 text-[0.78rem] leading-relaxed text-marine/60">
+          <ChampModifiable cle="reperes.motif" valeur={reperes.motif} as="p" multiligne className="block" />
+          <ChampModifiable
+            cle="reperes.methode"
+            valeur={reperes.methode}
+            as="p"
+            multiligne
+            className="block"
+          />
+          <p className="flex items-baseline gap-2 rounded-lg border border-marine/12 bg-marine/[0.03] px-3.5 py-2.5 text-marine/70">
+            <span aria-hidden="true" className="mt-[0.35rem] h-1.5 w-1.5 shrink-0 rounded-full bg-barnes" />
+            <ChampModifiable cle="reperes.precision" valeur={reperes.precision} multiligne />
+          </p>
+        </div>
+      </Section>
+
+      <p className="mt-auto pt-5 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
+        Source : {reperes.source}
+      </p>
+    </>
+  )
+}
+
+/**
+ * Le renvoi porté par les trois pages qui n'ont pas de substitut à offrir.
+ *
+ * Budgets par typologie, historique annuel et ventes comparables supposent des
+ * transactions datées : sans elles, il n'y a rien à calculer, et un repère de
+ * prix ne les remplace pas. La page dit donc pourquoi elle est vide et où
+ * trouver ce qui a pu être établi — plutôt que d'afficher le message générique
+ * d'un secteur simplement peu actif, qui ferait croire à un problème passager.
+ */
+const messageLivreFoncier = (quoi) =>
+  `${quoi} suppose des ventes datées, et le livre foncier du droit local ` +
+  'alsacien-mosellan n’en publie aucune. La page « Statistiques du secteur » porte, à la ' +
+  'place, les niveaux de prix de référence retenus pour la commune.'
+
 // --- 6. Statistiques de marché ---------------------------------------------
 
-export function PageMarche({ marche, numero }) {
+export function PageMarche({ marche, reperes, numero }) {
   return (
     <PageRapport numero={numero} surtitre="Marché" titre="Statistiques du secteur">
-      {!marche ? (
+      {!marche && reperes ? (
+        <BlocReperes reperes={reperes} />
+      ) : !marche ? (
         <BlocIndisponible
           cle="marche.absent"
-          message="Aucune vente publiée ne permet d’établir les statistiques de ce secteur. En Alsace-Moselle et à Mayotte, les mutations relèvent du livre foncier et ne sont diffusées nulle part."
+          message="Aucune vente publiée ne permet d’établir les statistiques de ce secteur. À Mayotte, dont le cadastre est encore en cours de constitution, la DGFiP ne diffuse aucune mutation."
         />
       ) : (
         <>
@@ -608,13 +808,17 @@ export function PageMarche({ marche, numero }) {
 
 // --- 7. Budgets par typologie ----------------------------------------------
 
-export function PageBudgets({ budgets, numero }) {
+export function PageBudgets({ budgets, reperes, numero }) {
   return (
     <PageRapport numero={numero} surtitre="Marché" titre="Budgets moyens par typologie">
       {!budgets ? (
         <BlocIndisponible
           cle="budgets.absent"
-          message="Le nombre de pièces n’est pas renseigné sur assez de ventes du secteur pour établir des budgets par typologie."
+          message={
+            reperes
+              ? messageLivreFoncier('Le budget moyen par typologie')
+              : 'Le nombre de pièces n’est pas renseigné sur assez de ventes du secteur pour établir des budgets par typologie.'
+          }
         />
       ) : (
         <>
@@ -683,13 +887,17 @@ export function PageBudgets({ budgets, numero }) {
 
 // --- 8. Historique des ventes ----------------------------------------------
 
-export function PageHistorique({ historique, numero }) {
+export function PageHistorique({ historique, reperes, numero }) {
   return (
     <PageRapport numero={numero} surtitre="Marché" titre="Historique des ventes">
       {!historique ? (
         <BlocIndisponible
           cle="historique.absent"
-          message="Aucun historique de ventes n’est publié pour ce secteur."
+          message={
+            reperes
+              ? messageLivreFoncier('L’historique annuel des ventes')
+              : 'Aucun historique de ventes n’est publié pour ce secteur.'
+          }
         />
       ) : (
         <>
@@ -698,16 +906,35 @@ export function PageHistorique({ historique, numero }) {
             <strong className="font-semibold text-marine">{historique.zone}</strong>.
           </p>
 
-          <Section titre="Ventes par année" className="mt-6">
-            <Barres
-              points={historique.lignes.map((ligne) => ({
-                annee: ligne.annee,
-                valeur: ligne.ventesBrut,
-                label: ligne.ventes,
-              }))}
-              legende="Nombre de ventes par année"
-            />
-          </Section>
+          {/* Les deux figures côte à côte plutôt que l'une sous l'autre : elles
+              répondent à deux questions différentes — combien de biens
+              changent de main, et à quel prix — et la feuille n'a pas la
+              hauteur de deux graphiques empilés sous un tableau de cinq
+              lignes. Sur écran étroit, la grille retombe en une colonne. */}
+          <div className="mt-6 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+            <Section titre="Ventes par année">
+              <Barres
+                points={historique.lignes.map((ligne) => ({
+                  annee: ligne.annee,
+                  valeur: ligne.ventesBrut,
+                  label: ligne.ventes,
+                }))}
+                legende="Nombre de ventes par année"
+              />
+            </Section>
+
+            <Section titre="Prix moyen au m²">
+              <Courbe
+                points={historique.lignes.map((ligne) => ({
+                  annee: ligne.annee,
+                  valeur: ligne.prixM2Brut,
+                  label: ligne.prixM2,
+                }))}
+                hauteur={100}
+                legende="Prix moyen au m² par année"
+              />
+            </Section>
+          </div>
 
           <Section titre="Détail annuel" className="mt-7">
             <table className="w-full">
@@ -757,7 +984,7 @@ export function PageHistorique({ historique, numero }) {
 
 // --- 9. Ventes comparables -------------------------------------------------
 
-export function PageComparables({ comparables, numero }) {
+export function PageComparables({ comparables, reperes, numero }) {
   const { masques, basculerMasque } = useEdition()
 
   return (
@@ -765,7 +992,11 @@ export function PageComparables({ comparables, numero }) {
       {!comparables ? (
         <BlocIndisponible
           cle="comparables.absent"
-          message="Aucune vente comparable n’a été trouvée à proximité du bien."
+          message={
+            reperes
+              ? messageLivreFoncier('La liste des ventes comparables')
+              : 'Aucune vente comparable n’a été trouvée à proximité du bien.'
+          }
         />
       ) : (
         <>
@@ -849,8 +1080,18 @@ export function PageEstimation({ estimation, marche, numero }) {
         />
       ) : (
         <>
-          <div className="rounded-xl border border-marine/12 bg-marine/[0.03] px-6 py-8 text-center">
-            <p className="font-mono text-[0.58rem] uppercase tracking-micro text-marine/45">
+          {/* Le montant, seul bloc du document à porter un aplat rouge franc
+              derrière son libellé et un filet plein de part et d'autre : c'est
+              la ligne que le vendeur cherche en ouvrant le rapport, et rien
+              d'autre sur ces onze pages ne doit se présenter comme elle. */}
+          <div className="relative overflow-hidden rounded-xl border border-barnes/20 bg-barnes/[0.045] px-6 py-8 text-center">
+            <AngleBarnes className="left-3 top-3" taille={16} />
+            <AngleBarnes className="bottom-3 right-3 rotate-180" taille={16} />
+            <span
+              aria-hidden="true"
+              className="absolute inset-x-0 top-0 h-[3px] bg-barnes"
+            />
+            <p className="font-mono text-[0.58rem] uppercase tracking-micro text-barnes">
               Valeur de présentation recommandée
             </p>
             <ChampModifiable

@@ -36,25 +36,59 @@ function lire(cle) {
 /**
  * L'agence qui édite le rapport.
  *
- * Les valeurs par défaut se limitent volontairement à ce qui ne peut pas être
- * faux — l'enseigne et la nature du document. Adresse, téléphone et courriel
- * restent vides jusqu'à ce qu'on les renseigne : ce sont des informations
- * vérifiables, et en inventer de plausibles ferait imprimer un faux.
+ * ── Ce que valent les défauts ci-dessous ──────────────────────────────────
+ *
+ * Ils étaient vides, et pour une bonne raison : inventer une adresse ou un
+ * numéro plausibles ferait imprimer un faux. Ils sont désormais renseignés,
+ * mais la règle n'a pas changé — elle est seulement satisfaite autrement. Ce
+ * sont les coordonnées **publiées** de BARNES Marseille, relevées sur
+ * `barnes-provence-littoral.com` et au registre du commerce : rien ici n'est
+ * supposé, tout est vérifiable à la source.
+ *
+ * C'est le réglage de la version de démonstration, qui présente l'outil aux
+ * couleurs d'une agence réelle. En production, chaque agence du réseau
+ * disposera de son compte et renseignera ses propres informations, qui
+ * alimenteront cette page à chaque rapport — les variables `VITE_AGENCE_*`
+ * ci-dessous en sont déjà la préfiguration, et priment sur ces valeurs sans
+ * qu'une ligne de code change.
+ *
+ * Deux champs restent volontairement vides, et ce n'est pas un oubli : le
+ * conseiller et ses coordonnées directes. Ils ne décrivent pas l'agence mais la
+ * personne qui signe l'avis de valeur — elle change d'un rapport à l'autre au
+ * sein d'une même agence, et faire figurer par défaut le nom d'un négociateur
+ * sous une estimation qu'il n'a pas établie serait précisément le genre de faux
+ * que ce module s'interdit. La page les affiche « Non renseigné », et ils se
+ * saisissent à l'écran, rapport par rapport.
  */
 export const AGENCE = {
   enseigne: lire('VITE_AGENCE_ENSEIGNE') ?? 'Barnes',
-  nom: lire('VITE_AGENCE_NOM') ?? 'Barnes',
-  baseline: lire('VITE_AGENCE_BASELINE') ?? 'Avis de valeur immobilière',
-  adresse: lire('VITE_AGENCE_ADRESSE'),
-  codePostal: lire('VITE_AGENCE_CODE_POSTAL'),
-  ville: lire('VITE_AGENCE_VILLE'),
-  telephone: lire('VITE_AGENCE_TELEPHONE'),
-  email: lire('VITE_AGENCE_EMAIL'),
-  siteWeb: lire('VITE_AGENCE_SITE'),
-  // Mentions légales du pied de page : numéro de carte professionnelle, RCS,
-  // garant financier. Ce sont elles qui font d'un avis de valeur un document
-  // d'agence plutôt qu'une note.
-  mentionsLegales: lire('VITE_AGENCE_MENTIONS'),
+  nom: lire('VITE_AGENCE_NOM') ?? 'BARNES Marseille',
+  baseline:
+    lire('VITE_AGENCE_BASELINE') ??
+    'Immobilier de prestige à Marseille, Cassis et sur la Côte Bleue — réseau BARNES Provence Littoral.',
+  adresse: lire('VITE_AGENCE_ADRESSE') ?? '550, rue Paradis',
+  codePostal: lire('VITE_AGENCE_CODE_POSTAL') ?? '13008',
+  ville: lire('VITE_AGENCE_VILLE') ?? 'Marseille',
+  // Le second bureau de l'agence, ouvert à la Pointe Rouge. Distinct de
+  // l'adresse principale plutôt que fondu dedans : un vendeur du sud de la
+  // ville n'a aucune raison de traverser Marseille pour un rendez-vous.
+  adresseSecondaire:
+    lire('VITE_AGENCE_ADRESSE_SECONDAIRE') ?? '49, avenue de Montredon — 13008 Marseille',
+  telephone: lire('VITE_AGENCE_TELEPHONE') ?? '+33 (0)4 91 60 50 50',
+  email: lire('VITE_AGENCE_EMAIL') ?? 'provence-littoral@barnes-international.com',
+  siteWeb: lire('VITE_AGENCE_SITE') ?? 'barnes-provence-littoral.com',
+  // Mentions légales du pied de page : forme sociale, RCS, siège. Ce sont elles
+  // qui font d'un avis de valeur un document d'agence plutôt qu'une note.
+  //
+  // Le numéro de carte professionnelle (CPI) et le garant financier n'y
+  // figurent pas : ils ne sont publiés ni sur le site de l'agence ni au
+  // registre, et une carte professionnelle inventée sur un document remis à un
+  // vendeur serait une infraction, pas une approximation. La phrase se termine
+  // donc sur ce qui est vérifiable, et l'agence complète le reste à l'écran.
+  mentionsLegales:
+    lire('VITE_AGENCE_MENTIONS') ??
+    'Marseille Luxury Realty — société par actions simplifiée, RCS Marseille 844 519 165, ' +
+      '550 rue Paradis, 13008 Marseille. Membre du réseau BARNES International Realty.',
   // Le conseiller qui signe. Distinct de l'agence : le même déploiement peut
   // servir à plusieurs négociateurs, et celui-ci se corrige alors à l'écran,
   // rapport par rapport.

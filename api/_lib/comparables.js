@@ -4,16 +4,39 @@ import { candidateYears, loadDepartementYear } from './dvf.js'
 import { departementsAround, distanceM } from './geo.js'
 
 /**
- * Paliers d'élargissement, du plus resserré au plus large.
+ * Paliers d'élargissement, du plus resserré au plus large — 300 m à 15 km.
  *
- * On part du voisinage immédiat sur les trois derniers millésimes, et on
- * n'élargit qu'à défaut d'échantillon suffisant. Rien de tout cela n'est dit à
- * l'utilisateur : le parcours est identique qu'il s'agisse d'un centre-ville
- * couvert par cent ventes ou d'un hameau qu'il a fallu chercher à quinze
- * kilomètres.
+ * On part du voisinage immédiat et on n'élargit qu'à défaut d'échantillon
+ * suffisant. Rien de tout cela n'est dit à l'utilisateur : le parcours est
+ * identique qu'il s'agisse d'un centre-ville couvert par cent ventes ou d'un
+ * hameau qu'il a fallu chercher à quinze kilomètres.
+ *
+ * ── Pourquoi le premier palier descend à 300 m ────────────────────────────
+ *
+ * Il valait 1 km, et c'était la cause d'une dilution géographique que le
+ * moteur Immovia a corrigée en premier : en ville, un disque d'un kilomètre
+ * recouvre trois ou quatre quartiers dont les prix au m² vont du simple au
+ * double. La médiane qui en sortait décrivait un secteur que personne
+ * n'habite — ni la rue du bien, ni le quartier d'à côté —, et deux biens
+ * séparés par une avenue en recevaient la même. Le seuil d'échantillon étant
+ * atteint dès la première marche, aucun palier suivant ne venait corriger le
+ * tir : la dilution était le cas *normal*, pas le cas dégradé.
+ *
+ * Trois cents mètres, c'est l'ordre de grandeur d'un pâté de maisons. Là où
+ * DVF est dense, la médiane redevient celle de la rue ; là où il ne l'est pas,
+ * les paliers suivants reprennent exactement le travail d'avant. Le coût est
+ * nul en réseau — les millésimes sont chargés par département, filtrer plus
+ * serré ne télécharge rien de plus — et se limite à quelques filtrages
+ * supplémentaires en mémoire.
+ *
+ * Les marches intermédiaires (600 m, 1 km) existent pour la même raison : un
+ * quartier qui ne rassemble pas cinq ventes à 300 m ne doit pas se retrouver
+ * d'un bond à deux kilomètres.
  */
 const LADDER = [
-  { radiusM: 1000, years: 3 },
+  { radiusM: 300, years: 3 },
+  { radiusM: 600, years: 3 },
+  { radiusM: 1000, years: 4 },
   { radiusM: 2000, years: 4 },
   { radiusM: 5000, years: 5 },
   { radiusM: 15000, years: 5 },

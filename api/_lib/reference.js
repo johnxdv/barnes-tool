@@ -12,10 +12,12 @@
 //    millésime, ni à l'échelle communale ni à l'échelle départementale. Aucun
 //    élargissement du rayon n'y changera quoi que ce soit.
 //
-// Le siège de l'agence étant à Diebling (57), c'est ce second cas qui se
-// présentera sur la quasi-totalité des estimations de son secteur. Les valeurs
-// ci-dessous ne sont donc PAS un filet de sécurité théorique : ce sont, en
-// Moselle, les seuls chiffres dont le moteur dispose. Elles n'ont d'autre
+// Sur les trois départements du livre foncier, ce second cas est le cas
+// ordinaire, et les valeurs ci-dessous ne sont donc PAS un filet de sécurité
+// théorique : ce sont les seuls chiffres dont le moteur dispose. Elles n'y
+// restent toutefois pas départementales — `_lib/alsaceMoselle.js` les module
+// par le niveau de vie médian de la commune, publié par l'Insee, qui couvre ce
+// territoire comme le reste de la France. Elles n'ont d'autre
 // prétention que l'ordre de grandeur et doivent être remplacées par les
 // références de l'agence — c'est l'objet de la variable d'environnement
 // ci-dessous.

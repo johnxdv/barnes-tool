@@ -421,7 +421,7 @@
      `CarteCommodites`) — il ne saurait pas le faire seul, ses dalles étant
      positionnées pour la largeur d'écran. */
   .rapport-carte {
-    height: 66mm !important;
+    height: 70mm !important;
   }
 
   /* Les dalles de la carte sont des images posées en absolu : sans cela, le

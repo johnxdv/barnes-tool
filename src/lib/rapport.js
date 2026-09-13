@@ -3,19 +3,27 @@
 // et reçoit des blocs de chiffres déjà arrêtés — DVF, Insee, BCE. C'est ce qui
 // garantit que deux agents ouvrant le même rapport y lisent les mêmes nombres.
 //
-// Une seule exception, et elle est délibérée : les commodités du quartier, que
-// le navigateur va chercher lui-même chez Overpass (voir `./poi.js`). Le
-// service plafonne par adresse IP, et les quelques IP de sortie de l'hébergeur
-// étaient assez sollicitées pour être servies au ralenti — la page sortait
-// vide, à remplir à la main. Ce qui en revient n'est de toute façon pas un
-// calcul mais un relevé : des écoles, des commerces et des arrêts, à moins de
-// 500 m. Deux agents en obtiennent la même liste, à ceci près qu'ils ne
-// l'obtiennent pas du même serveur.
+// Deux exceptions, et elles sont délibérées.
 //
-// Les deux moitiés partent ensemble et se rejoignent ici : le serveur ne
-// travaille pas pendant qu'Overpass répond, et l'assemblage ne dure pas plus
-// longtemps qu'avant.
+// **Les commodités du quartier** (`./poi.js`), qu'Overpass plafonne par adresse
+// IP : les quelques IP de sortie de l'hébergeur étaient assez sollicitées pour
+// être servies au ralenti, et la page sortait vide, à remplir à la main. Ce qui
+// en revient n'est de toute façon pas un calcul mais un relevé : des écoles,
+// des commerces et des arrêts à quelques centaines de mètres. Deux agents en
+// obtiennent la même liste, à ceci près qu'ils ne l'obtiennent pas du même
+// serveur.
+//
+// **L'environnement du bien** (`./environnement.js`) : voie rapide, voie
+// ferrée, trait de côte, espaces boisés. Même raison de fond — c'est un relevé,
+// pas un calcul — et une raison de forme : il interroge le WFS de la
+// Géoplateforme, que le navigateur sollicite déjà pour le repérage du bâtiment,
+// et dont il a donc la connexion ouverte.
+//
+// Les trois parts partent ensemble et se rejoignent ici : le serveur ne
+// travaille pas pendant que les autres répondent, et l'assemblage ne dure pas
+// plus longtemps qu'avant.
 
+import { fetchEnvironnement } from './environnement.js'
 import { sansPhotos } from './photos.js'
 import { fetchPointsInteret } from './poi.js'
 
@@ -41,7 +49,9 @@ export const RAPPORT_VIDE = {
   genereLe: null,
   zone: null,
   poi: null,
+  environnement: null,
   quartier: null,
+  reperes: null,
   marche: null,
   budgets: null,
   historique: null,
@@ -80,24 +90,27 @@ export async function requestRapport({ selection, address, price, characteristic
     characteristics: sansPhotos(characteristics ?? null),
   }
 
-  // Les deux moitiés en parallèle. `fetchPointsInteret` ne lève pas hors
-  // annulation — l'échec des deux instances Overpass rend un relevé
-  // `disponible: false`, que la page des commodités affiche en attente de
-  // saisie. Elle est tout de même protégée : elle ne doit en aucun cas emporter
-  // le reste du rapport.
-  const [blocs, poi] = await Promise.all([
+  // Les trois parts en parallèle. Ni `fetchPointsInteret` ni
+  // `fetchEnvironnement` ne lèvent hors annulation — chacune rend un relevé
+  // pauvre plutôt qu'une erreur. Elles sont tout de même protégées : aucune ne
+  // doit emporter le reste du rapport.
+  const [blocs, poi, environnement] = await Promise.all([
     fetchBlocsServeur(payload),
     fetchPointsInteret(payload.lat, payload.lon).catch((error) => {
       console.error('[rapport] Relevé des commodités en échec —', error)
       return null
     }),
+    fetchEnvironnement({ lat: payload.lat, lon: payload.lon }).catch((error) => {
+      console.error('[rapport] Relevé de l’environnement en échec —', error)
+      return null
+    }),
   ])
 
-  // Le relevé du navigateur passe après l'étalement des blocs serveur, et donc
-  // devant : `api/rapport.js` ne renvoie plus de champ `poi`, mais un rapport
-  // assemblé par une version antérieure de la fonction en porterait un, et
-  // c'est celui d'ici qui doit gagner.
-  return { ...blocs, poi }
+  // Les relevés du navigateur passent après l'étalement des blocs serveur, et
+  // donc devant : `api/rapport.js` ne renvoie plus de champ `poi`, mais un
+  // rapport assemblé par une version antérieure de la fonction en porterait un,
+  // et c'est celui d'ici qui doit gagner.
+  return { ...blocs, poi, environnement }
 }
 
 /** Les blocs assemblés par la fonction serverless. Ne rejette jamais. */

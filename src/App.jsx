@@ -74,9 +74,9 @@ export default function App() {
   // qui est déjà su.
   const [detection, setDetection] = useState(AUCUNE_DETECTION)
   // Détail des ajustements que les caractéristiques déclarées ont fait jouer
-  // sur le prix — état général, classe énergie, piscine, stationnements. Vide
-  // jusqu'à la validation du formulaire, qui est le premier appel à les
-  // connaître. Le rapport les imprime sous le montant : sans eux, deux biens
+  // sur le prix — état général, classe énergie, standing, étage, piscine,
+  // stationnements. Vide jusqu'à la validation du formulaire, qui est le
+  // premier appel à les connaître. Le rapport les imprime sous le montant : sans eux, deux biens
   // voisins estimés à des prix différents n'auraient aucune explication à
   // présenter au vendeur.
   const [ajustements, setAjustements] = useState(AUCUN_AJUSTEMENT)
@@ -155,8 +155,8 @@ export default function App() {
   //
   // Le calcul est relancé dans tous les cas, surface déclarée ou non : le
   // formulaire porte désormais des caractéristiques qui pèsent sur le prix —
-  // état général, classe énergie, piscine, stationnements (voir
-  // `api/_lib/ajustements.js`) —, et la charge utile n'est donc plus jamais
+  // état général, classe énergie, standing, étage, piscine, stationnements
+  // (voir `api/_lib/ajustements.js`) —, et la charge utile n'est donc plus jamais
   // identique à celle de l'analyse. Un curseur de surface laissé au repos
   // n'empêche plus un état « à rénover » de se voir.
   //

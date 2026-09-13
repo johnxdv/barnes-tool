@@ -9,6 +9,7 @@ import {
   fetchBuildings,
 } from '../../lib/ign'
 import { BUILDINGS_RADIUS_M, boundingBox, footprintAreaM2 } from '../../lib/geo'
+import { LOGO_BARNES_SRC } from '../ui/LogoBarnes'
 import { useMediaQuery } from '../../lib/useMediaQuery'
 
 // Zoom d'ouverture : à ce niveau l'orthophoto est à sa résolution native (~20 cm
@@ -133,14 +134,48 @@ export function BuildingMap({ lat, lon, addressLabel, selection, onSelect }) {
       .on('load', () => setTilesReady(true))
       .addTo(map)
 
-    // Repère de l'adresse géocodée — non interactif : il oriente sans capter le clic.
-    L.circleMarker([lat, lon], {
-      radius: 5,
-      color: '#3C3C3C',
-      weight: 2,
-      fillColor: '#B4002F',
-      fillOpacity: 1,
+    // Repère de l'adresse géocodée — non interactif : il oriente sans capter le
+    // clic.
+    //
+    // C'était une pastille rouge de cinq pixels de rayon, et elle se perdait
+    // sur une photographie aérienne : toitures de tuile, capots de voiture, la
+    // moitié d'une vue de Provence est rouge. L'écusson, deux fois plus grand
+    // et posé sur une tige comme une épingle de carte, se distingue du fond
+    // parce qu'il n'a pas la forme de ce qu'il y a dessous — et il signe la
+    // carte au passage.
+    //
+    // Un `divIcon` plutôt qu'un `circleMarker` : celui-ci ne sait dessiner
+    // qu'un cercle SVG, là où il faut ici une image et sa tige. L'ancrage tombe
+    // à la pointe de la tige, et non au centre de l'écusson, pour que le repère
+    // désigne l'adresse au lieu de flotter au-dessus.
+    L.marker([lat, lon], {
       interactive: false,
+      keyboard: false,
+      icon: L.divIcon({
+        className: '',
+        html:
+          '<span style="display:block;position:relative;width:34px;height:44px">' +
+            // La tige. Un dégradé plutôt qu'un aplat : elle s'efface vers la
+            // pointe et paraît se poser sur le sol au lieu de s'y planter.
+            '<span style="position:absolute;left:16px;bottom:0;width:2px;height:13px;' +
+              'background:linear-gradient(to bottom,#B4002F,rgba(180,0,47,0.35));' +
+              'box-shadow:0 0 0 1px rgba(255,255,255,0.75)"></span>' +
+            // Le point de contact, à la pointe : sans lui, la tige s'arrête
+            // dans le vide et l'œil ne sait pas ce qu'elle désigne.
+            '<span style="position:absolute;left:14.5px;bottom:-2px;width:5px;height:5px;' +
+              'border-radius:9999px;background:#B4002F;' +
+              'box-shadow:0 0 0 1.5px rgba(255,255,255,0.9)"></span>' +
+            // L'écusson, sur pastille claire : le fichier de marque est un SVG
+            // à fond transparent, et sur une photographie aérienne sombre son
+            // rouge disparaîtrait.
+            `<img src="${LOGO_BARNES_SRC}" alt="" width="34" height="34" ` +
+              'style="position:absolute;left:0;top:0;width:34px;height:34px;' +
+              'border-radius:9999px;background:rgba(255,255,255,0.92);padding:2px;' +
+              'box-shadow:0 1px 6px rgba(60,60,60,0.45)">' +
+          '</span>',
+        iconSize: [34, 44],
+        iconAnchor: [17, 44],
+      }),
     }).addTo(map)
 
     map.on('click', (event) => {

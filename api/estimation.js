@@ -15,6 +15,7 @@
 //   C. Médiane au m² × surface       → ci-dessous
 //   D. Ajustements du formulaire     → `_lib/ajustements.js`
 //   E. Replis successifs             → `_lib/reference.js`
+//   E'. Territoire du livre foncier   → `_lib/alsaceMoselle.js` (Insee Filosofi)
 //
 // L'étape D n'existe qu'au second appel. Le moteur est sollicité deux fois par
 // parcours : une première fois pendant l'analyse, sur ce que les bases savent
@@ -31,6 +32,7 @@ import { ajustementsPrix } from './_lib/ajustements.js'
 import { describeBien } from './_lib/bien.js'
 import { departementPricePerM2, findComparables } from './_lib/comparables.js'
 import { communeAtPoint, departementFromInsee } from './_lib/geo.js'
+import { estLivreFoncier, prixLivreFoncier } from './_lib/alsaceMoselle.js'
 import { estHorsCouvertureDvf, prixReference } from './_lib/reference.js'
 import { detectPropertyType, estTypeFiable } from '../src/lib/typeBien.js'
 import { MONACO_PRICE_PER_M2 } from '../src/lib/monaco.js'
@@ -140,15 +142,47 @@ function badRequest(res, message) {
 }
 
 /**
+ * Prix de référence, quand aucune vente comparable ne peut être trouvée.
+ *
+ * Sur les trois départements du livre foncier — Moselle, Bas-Rhin, Haut-Rhin —
+ * ce repli n'est pas un filet de secours mais le calcul ordinaire : DVF n'y
+ * publiera jamais rien (voir `_lib/alsaceMoselle.js`). Le niveau départemental
+ * y est donc modulé par le niveau de vie médian de la commune, seule source
+ * ouverte qui couvre ce territoire à cette échelle — un repère communal plutôt
+ * qu'un même chiffre pour tout un département.
+ *
+ * Une surcharge communale posée par l'agence (`ESTIMATION_PRIX_M2`) échappe à
+ * cette modulation : elle est déjà locale, et la corriger d'un indice
+ * reviendrait à discuter le chiffre de celui qui connaît le marché.
+ */
+async function referenceLocale({ codeInsee, departement, type }, { signal }) {
+  const base = prixReference({ codeInsee, departement, type })
+  const nu = { ...base, count: 0, radiusM: null }
+
+  if (base.source === 'reference-commune' || !estLivreFoncier(departement)) return nu
+
+  const affine = await prixLivreFoncier(
+    { codeInsee, departement, type, ancre: base.pricePerM2 },
+    { signal },
+  ).catch(() => null)
+
+  if (!affine) return nu
+
+  return {
+    pricePerM2: affine.pricePerM2,
+    source: affine.source,
+    count: 0,
+    radiusM: null,
+    indice: affine.indice?.indice ?? null,
+  }
+}
+
+/**
  * Prix au m² retenu, selon la meilleure source disponible — et repli en
  * cascade jusqu'à ce qu'il y en ait une.
  */
 async function resolvePricePerM2({ lat, lon, type, departement, codeInsee }, { signal }) {
-  const reference = () => ({
-    ...prixReference({ codeInsee, departement, type }),
-    count: 0,
-    radiusM: null,
-  })
+  const reference = () => referenceLocale({ codeInsee, departement, type }, { signal })
 
   // Départements sans aucune donnée DVF (Alsace-Moselle, Mayotte) : inutile de
   // dérouler l'élargissement, il ne trouvera rien.
@@ -359,6 +393,9 @@ export default async function handler(req, res) {
       departement,
       pricePerM2: Math.round(prix.pricePerM2),
       source: prix.source,
+      // Renseigné sur le seul territoire du livre foncier : l'indice de niveau
+      // de vie qui a écarté le repère communal du niveau départemental.
+      ...(prix.indice ? { indiceCommune: prix.indice } : {}),
       comparables: prix.count,
       radiusM: prix.radiusM ?? null,
       // Le détail des ajustements appliqués, ligne à ligne : c'est par lui que

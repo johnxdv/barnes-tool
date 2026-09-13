@@ -12,6 +12,14 @@
 //   d. Historique annuel des ventes   → `_lib/secteur.js`  (DVF)
 //   e. Profil acquéreur               → `_lib/credit.js`   (BCE)
 //   f. Points forts / de réserve      → `_lib/points.js`   (formulaire)
+//   g. Repères Alsace-Moselle         → `_lib/alsaceMoselle.js` (Insee)
+//
+// Le dernier bloc n'existe que sur trois départements, et pour une raison de
+// droit plutôt que de technique : la Moselle, le Bas-Rhin et le Haut-Rhin
+// relèvent du livre foncier, et leurs ventes n'entrent dans aucun millésime
+// DVF. Les blocs b, c, d et les ventes comparables y sortent donc vides quoi
+// qu'on fasse. Plutôt que quatre pages muettes, le rapport y porte un repère
+// de prix construit sur ce que l'Insee, lui, publie partout — et le dit.
 //
 // Une page manque à cette liste, et c'est volontaire : les commodités du
 // quartier. Overpass plafonne par adresse IP, et les quelques IP de sortie de
@@ -37,6 +45,7 @@
 // front n'a en revanche aucune part au calcul — les mêmes chiffres au même
 // moment, quel que soit le navigateur.
 
+import { estLivreFoncier, reperesLivreFoncier } from './_lib/alsaceMoselle.js'
 import { communeAtPoint, departementFromInsee } from './_lib/geo.js'
 import { fetchQuartier } from './_lib/quartier.js'
 import { fetchTaux, profilAcquereur, HYPOTHESES } from './_lib/credit.js'
@@ -118,10 +127,10 @@ export default async function handler(req, res) {
       (monaco ? null : await communeAtPoint(lat, lon, { signal }).catch(() => null))
     const departement = monaco ? null : departementFromInsee(codeInsee)
 
-    // Les trois sources ne dépendent pas les unes des autres : les enchaîner
-    // triplerait le temps d'assemblage. DVF est de loin la plus lourde, et
-    // c'est elle qui donne son tempo à l'ensemble.
-    const [secteur, quartier, credit] = await Promise.all([
+    // Les sources ne dépendent pas les unes des autres : les enchaîner
+    // multiplierait d'autant le temps d'assemblage. DVF est de loin la plus
+    // lourde, et c'est elle qui donne son tempo à l'ensemble.
+    const [secteur, quartier, credit, reperes] = await Promise.all([
       ouRepli(
         ventesSecteur({ lat, lon, departement, codeInsee, commune: body.commune }, { signal }),
         { sales: [], departementales: [], zone: { niveau: 'aucun', label: null, radiusM: null } },
@@ -137,6 +146,21 @@ export default async function handler(req, res) {
             'profil du quartier',
           ),
       ouRepli(fetchTaux({ signal }), null, 'taux d’emprunt'),
+      // Territoire du livre foncier seulement — ailleurs, DVF répond et il n'y
+      // a rien à suppléer. La requête part en parallèle du reste plutôt qu'en
+      // repli après coup : attendre l'échec de DVF pour la lancer ajouterait
+      // ses quatre secondes à celles du millésime, et le budget global n'y
+      // suffirait pas.
+      estLivreFoncier(departement)
+        ? ouRepli(
+            reperesLivreFoncier(
+              { codeInsee, departement, commune: body.commune },
+              { signal },
+            ),
+            null,
+            'repères Alsace-Moselle',
+          )
+        : Promise.resolve(null),
     ])
 
     const taux = credit?.taux ?? null
@@ -147,6 +171,9 @@ export default async function handler(req, res) {
       // Pas de `poi` : le relevé des commodités est fait par le navigateur et
       // ajouté au rapport à l'arrivée (voir `src/lib/rapport.js`).
       quartier,
+      // Non nul sur les seuls départements du livre foncier : les pages
+      // chiffrées s'y rabattent dessus, et le disent en toutes lettres.
+      reperes,
       marche: marcheSecteur(secteur.sales),
       budgets: budgetsParTypologie(secteur.sales, { taux }),
       historique: historiqueAnnuel(secteur.sales),
@@ -171,6 +198,7 @@ export default async function handler(req, res) {
         ventes: secteur.sales.length,
         comparables: rapport.comparables.length,
         quartier: quartier?.niveau ?? 'aucun',
+        reperes: reperes ? reperes.indice?.indice ?? 'sans indice' : null,
         taux,
         elapsedMs: Date.now() - startedAt,
       }),

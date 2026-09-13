@@ -1,7 +1,19 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { IGN_ATTRIBUTION, PLAN_MAX_NATIVE_ZOOM, PLAN_TILE_URL } from '../../lib/ign'
+
+/**
+ * Fond de secours — les dalles d'OpenStreetMap.
+ *
+ * Le Plan IGN s'arrête aux frontières françaises et, comme tout service, tombe
+ * parfois. Sans repli, la carte sortait alors en aplat gris : un cadre vide au
+ * milieu du rapport, ce qui est précisément ce que cette page ne peut pas se
+ * permettre. Le repli n'est posé que si les dalles françaises échouent
+ * réellement — il ne s'agit pas de renoncer au fond officiel par précaution.
+ */
+const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+const OSM_ATTRIBUTION_FOND = '© OpenStreetMap'
 
 /**
  * Carte des commodités — la page « points d'intérêt » du rapport, en image.
@@ -59,8 +71,26 @@ const COULEUR_PAR_DEFAUT = '#ABABAB'
 
 export const couleurCategorie = (id) => COULEURS[id] ?? COULEUR_PAR_DEFAUT
 
-/** Hauteur de la carte, à l'écran comme sur la feuille. Voir `index.css`. */
-const HAUTEUR = 250
+/**
+ * Format de la carte — et c'est le format, plus que la taille, qui a changé.
+ *
+ * Elle occupait toute la largeur de la page sur 250 px de haut : un bandeau
+ * trois fois plus large que haut. Or le cadrage se cale sur le disque relevé,
+ * qui est aussi haut que large ; c'est donc la hauteur qui commandait, et le
+ * relevé n'occupait qu'un tiers de la largeur disponible. Les pastilles se
+ * rassemblaient au centre d'une carte essentiellement vide, et le quartier
+ * qu'elles décrivent ne se lisait plus.
+ *
+ * La carte est maintenant presque carrée et centrée : le disque y remplit près
+ * de neuf dixièmes du cadre. Elle est plus petite en surface qu'un bandeau
+ * pleine largeur, et pourtant le relevé y est deux fois plus grand.
+ *
+ * Les valeurs sont les maximums que la feuille A4 permette. Au-delà, la page
+ * déborde sur une seconde — ce que la quatrième ligne de chaque catégorie a
+ * déjà payé une fois (voir `MAX_PAR_CATEGORIE` dans `src/lib/poi.js`).
+ */
+const HAUTEUR = 265
+const LARGEUR_MAX = '23rem'
 
 /**
  * Cadrage : le disque interrogé, plus une marge.
@@ -72,8 +102,11 @@ const HAUTEUR = 250
  */
 const MARGE_PX = 12
 
-export function CarteCommodites({ carte }) {
+export function CarteCommodites({ carte, source }) {
   const containerRef = useRef(null)
+  // Provenance du fond réellement affiché : l'attribution imprimée sous la
+  // carte doit nommer celui qu'on voit, pas celui qu'on avait demandé.
+  const [fond, setFond] = useState(IGN_ATTRIBUTION)
 
   const { lat, lon, rayonM } = carte ?? {}
   // Les points sont reconstruits à chaque rendu du rapport (le modèle est pur,
@@ -91,6 +124,14 @@ export function CarteCommodites({ carte }) {
     const map = L.map(container, {
       center: [lat, lon],
       zoom: 15,
+      // Zoom fractionnaire. Leaflet arrondit par défaut au niveau entier
+      // inférieur, et le cadre de cette carte est un bandeau trois fois plus
+      // large que haut : le disque relevé n'y tenait qu'à un niveau de trop, si
+      // bien qu'il occupait cent quarante pixels dans une hauteur de deux cent
+      // cinquante. Les points se rassemblaient au milieu d'une carte
+      // essentiellement vide, et le quartier qu'ils décrivent ne se lisait
+      // plus. Sans arrondi, le cadrage épouse exactement le disque.
+      zoomSnap: 0,
       attributionControl: false,
       zoomControl: false,
       dragging: false,
@@ -104,7 +145,24 @@ export function CarteCommodites({ carte }) {
       tap: false,
     })
 
-    L.tileLayer(PLAN_TILE_URL, { maxNativeZoom: PLAN_MAX_NATIVE_ZOOM, maxZoom: 19 }).addTo(map)
+    const plan = L.tileLayer(PLAN_TILE_URL, {
+      maxNativeZoom: PLAN_MAX_NATIVE_ZOOM,
+      maxZoom: 19,
+    }).addTo(map)
+
+    // Bascule sur OpenStreetMap au premier échec de dalle, et une seule fois :
+    // `tileerror` se déclenche par dalle, et il y en a une douzaine à l'écran.
+    // La couche IGN est retirée dans la foulée — superposée, elle laisserait
+    // les dalles qu'elle a su charger par-dessus celles du repli, et la carte
+    // sortirait en damier.
+    let bascule = false
+    plan.on('tileerror', () => {
+      if (bascule) return
+      bascule = true
+      map.removeLayer(plan)
+      L.tileLayer(OSM_TILE_URL, { maxNativeZoom: 19, maxZoom: 19 }).addTo(map)
+      setFond(OSM_ATTRIBUTION_FOND)
+    })
 
     // Le disque parcouru, tracé avant les points pour rester sous eux.
     const disque = L.circle([lat, lon], {
@@ -184,6 +242,8 @@ export function CarteCommodites({ carte }) {
     // de son contenu.
   }, [lat, lon, rayonM, signature])
 
+  // Seul un centre manquant empêche la carte : un relevé sans un point en
+  // produit une valide — le bien, son disque de recherche, et les rues autour.
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
 
   return (
@@ -192,14 +252,20 @@ export function CarteCommodites({ carte }) {
         ref={containerRef}
         role="img"
         aria-label="Carte des commodités relevées autour du bien, par catégorie"
-        style={{ height: `${HAUTEUR}px` }}
-        className="rapport-carte w-full overflow-hidden rounded-lg border border-marine/12 bg-marine/[0.03]"
+        style={{ height: `${HAUTEUR}px`, maxWidth: LARGEUR_MAX }}
+        className="rapport-carte mx-auto w-full overflow-hidden rounded-lg border border-marine/12 bg-marine/[0.03]"
       />
 
-      <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-1.5">
+      {/* Légende et provenances sur la même ligne, sous la carte.
+          Les attributions avaient leur paragraphe en pied de page ; sur une
+          feuille A4 où chaque millimètre est disputé, deux lignes de mentions
+          à cinq millimètres du bord valaient un cinquième de la hauteur de la
+          carte. Elles disent la même chose ici, à côté de ce qu'elles
+          attribuent. */}
+      <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-1">
         <Legende carte={carte} />
         <span className="font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
-          Fond de plan {IGN_ATTRIBUTION}
+          {source ? `Relevé ${source} · ` : ''}Fond de plan {fond}
         </span>
       </figcaption>
     </figure>

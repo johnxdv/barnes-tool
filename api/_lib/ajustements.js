@@ -14,12 +14,19 @@
 //     comparables ; ces ajustements la nuancent, ils ne la refont pas.
 //
 //  2. **Rien qui soit déjà compté ailleurs.** Nombre de pièces, chambres,
-//     salles de bain, salles d'eau, niveaux, terrasse : ces caractéristiques
-//     figurent au rapport mais n'entrent pas dans le calcul. La comparaison DVF
-//     se fait par typologie et sur la surface habitable — un T4 est comparé à
-//     des T4 —, et les repayer ici reviendrait à compter deux fois le même
-//     effet. C'est la seule raison de leur absence : elles ne sont pas jugées
-//     sans valeur, elles sont jugées déjà payées.
+//     salles de bain, salles d'eau, niveaux : ces caractéristiques figurent au
+//     rapport mais n'entrent pas dans le calcul. Elles ne décrivent, à surface
+//     égale, que le découpage intérieur du bien — un T4 de 90 m² et un T3 de
+//     90 m² se vendent au même ordre de prix dans la même rue —, et la surface
+//     est déjà le multiplicateur du montant. Les repayer ici reviendrait à
+//     compter deux fois le même mètre carré.
+//
+//     La terrasse relève du même raisonnement, à une nuance près : elle ne
+//     figure pas dans la surface habitable, mais les ventes comparables du
+//     secteur en comportent en moyenne autant que le bien estimé — c'est
+//     précisément ce que décrit une médiane locale. Seul un écart franc à cette
+//     moyenne mériterait un ajustement, et le formulaire ne recueille pas de
+//     quoi l'établir.
 //
 //  3. **Un champ vide n'ajuste rien.** Le formulaire distingue le zéro déclaré
 //     du champ laissé de côté (voir `SpecControls`), et cette distinction est
@@ -65,6 +72,57 @@ export const COEF_CLASSE_ENERGIE = {
   E: -0.03,
   F: -0.06,
   G: -0.08,
+}
+
+/**
+ * Étage — appartements seulement, et le formulaire ne pose la question qu'à
+ * eux (voir `EstimationCharacteristicsStep`).
+ *
+ * L'échelle n'est pas linéaire et ne peut pas l'être : ce qui se paie n'est pas
+ * la hauteur mais ce qu'elle apporte — l'absence de vis-à-vis, le calme, la
+ * lumière. Le rez-de-chaussée les perd tous les trois d'un coup et se décote
+ * franchement ; le premier reste en retrait ; les deuxième et troisième sont la
+ * référence, l'étage du bien médian que porte déjà la médiane DVF. Au-dessus,
+ * la prime existe mais se tasse vite : entre un sixième et un neuvième étage,
+ * l'acquéreur ne distingue plus grand-chose.
+ *
+ * Un étage élevé sans ascenseur se décoterait, lui, au lieu de se valoriser —
+ * mais le formulaire ne recueille pas la présence d'un ascenseur, et la
+ * supposer serait décider à la place de l'agent. Le barème retient donc
+ * l'hypothèse majoritaire du parc collectif de plus de trois niveaux.
+ */
+export function coefEtage(etage) {
+  if (etage === 0) return -0.04
+  if (etage === 1) return -0.01
+  if (etage <= 3) return 0
+  if (etage <= 5) return 0.02
+  return 0.03
+}
+
+/**
+ * Standing — la prestation de l'immeuble ou de la construction, à distinguer de
+ * l'état général, qui décrit l'usure.
+ *
+ * Les deux se cumulent sans faire double emploi : un immeuble haussmannien de
+ * belle facture peut être à rénover, un pavillon des années 1980 impeccablement
+ * entretenu reste un pavillon des années 1980. « Standard » est la référence,
+ * c'est-à-dire le bien que décrit déjà la médiane du secteur.
+ *
+ * La prime du haut standing est la plus forte du barème, et c'est cohérent avec
+ * le marché de la maison : c'est le critère qui, à surface et à adresse égales,
+ * écarte le plus les prix. Elle reste néanmoins bornée par le plafond de cumul
+ * — un bien d'exception ne se calcule pas par correctif sur une médiane.
+ */
+export const COEF_STANDING = {
+  standard: 0,
+  'bon-standing': 0.03,
+  'haut-standing': 0.07,
+}
+
+const STANDING_LABELS = {
+  standard: 'Standard',
+  'bon-standing': 'Bon standing',
+  'haut-standing': 'Haut standing',
 }
 
 /** Piscine déclarée. Un équipement qui élargit le public, pas qui refait le prix. */
@@ -141,6 +199,30 @@ export function ajustementsPrix(characteristics) {
       id: 'classe-energie',
       label: `Classe énergie ${c.classeEnergie}`,
       coefficient: dpe,
+    })
+  }
+
+  // L'étage n'est retenu qu'en appartement : le formulaire l'efface au
+  // changement de type, mais une requête forgée — ou un état hérité d'un
+  // parcours précédent — pourrait encore en porter un sur une maison.
+  const etage = Number(c.etage)
+  if (c.typeBien === 'appartement' && Number.isInteger(etage) && etage >= 0) {
+    const coefficient = coefEtage(etage)
+    if (coefficient !== 0) {
+      details.push({
+        id: 'etage',
+        label: etage === 0 ? 'Rez-de-chaussée' : etage === 1 ? '1er étage' : `${etage}e étage`,
+        coefficient,
+      })
+    }
+  }
+
+  const standing = COEF_STANDING[c.standing]
+  if (standing != null && standing !== 0) {
+    details.push({
+      id: 'standing',
+      label: `Standing — ${STANDING_LABELS[c.standing].toLowerCase()}`,
+      coefficient: standing,
     })
   }
 

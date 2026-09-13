@@ -99,6 +99,10 @@ export function RapportView({
       {
         id: 'commodites',
         label: 'Commodités à proximité',
+        // Écartée faute de coordonnées — c'est-à-dire à Monaco, où rien de la
+        // chaîne cartographique ne répond. Partout ailleurs la page existe :
+        // son relevé peut être maigre, sa carte est toujours là.
+        disponible: modele.commodites !== null,
         rendu: (numero) => <PageCommodites commodites={modele.commodites} numero={numero} />,
       },
       {
@@ -109,22 +113,38 @@ export function RapportView({
       {
         id: 'marche',
         label: 'Statistiques du secteur',
-        rendu: (numero) => <PageMarche marche={modele.marche} numero={numero} />,
+        rendu: (numero) => (
+          <PageMarche marche={modele.marche} reperes={modele.reperes} numero={numero} />
+        ),
       },
       {
         id: 'budgets',
         label: 'Budgets moyens par typologie',
-        rendu: (numero) => <PageBudgets budgets={modele.budgets} numero={numero} />,
+        rendu: (numero) => (
+          <PageBudgets budgets={modele.budgets} reperes={modele.reperes} numero={numero} />
+        ),
       },
       {
         id: 'historique',
         label: 'Historique des ventes',
-        rendu: (numero) => <PageHistorique historique={modele.historique} numero={numero} />,
+        rendu: (numero) => (
+          <PageHistorique
+            historique={modele.historique}
+            reperes={modele.reperes}
+            numero={numero}
+          />
+        ),
       },
       {
         id: 'comparables',
         label: 'Ventes comparables',
-        rendu: (numero) => <PageComparables comparables={modele.comparables} numero={numero} />,
+        rendu: (numero) => (
+          <PageComparables
+            comparables={modele.comparables}
+            reperes={modele.reperes}
+            numero={numero}
+          />
+        ),
       },
       {
         id: 'estimation',

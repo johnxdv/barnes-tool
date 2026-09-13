@@ -28,12 +28,35 @@ const CORAIL = '#B4002F'
  * ventes, une base tronquée transforme une variation de 5 % en un doublement
  * apparent. C'est le genre de raccourci graphique qu'un avis de valeur ne peut
  * pas se permettre.
+ *
+ * ── Pourquoi les hauteurs sont en pixels, et non en pourcentage ───────────
+ *
+ * Elles l'étaient, et les barres sortaient vides — à l'écran par intermittence,
+ * à l'impression presque toujours. La cause tenait en une ligne de CSS : une
+ * hauteur en pourcentage posée sur un élément qui est aussi un enfant de boîte
+ * flexible. Le pourcentage se résout sur la hauteur du conteneur, puis le
+ * moteur constate que la colonne déborde — la barre pleine plus ses deux
+ * étiquettes dépassent le cadre — et rétracte la barre pour rentrer. La
+ * proportion affichée n'est alors plus celle des données, et une barre courte
+ * peut disparaître tout à fait.
+ *
+ * Les hauteurs sont donc calculées ici, en pixels, sur une zone de tracé dont
+ * la hauteur est connue : ce qui est dessiné est exactement ce qui a été
+ * calculé, à l'écran comme sur la feuille. Les étiquettes, elles, sont sorties
+ * de la zone de tracé et ne peuvent plus la comprimer.
  */
+
+/** Hauteur des deux lignes d'étiquettes, retirée de la zone de tracé. */
+const ETIQUETTES_PX = 32
+
+/** En deçà, une barre cesse d'être visible ; au-dessus de zéro, elle doit l'être. */
+const BARRE_MIN_PX = 3
+
 export function Barres({ points, hauteur = 132, accentDernier = true, legende }) {
   if (!points || points.length === 0) return null
 
   const max = Math.max(...points.map((p) => p.valeur), 1)
-  const largeur = 100 / points.length
+  const zone = Math.max(hauteur - ETIQUETTES_PX, 24)
 
   return (
     <figure className="mt-1">
@@ -41,27 +64,37 @@ export function Barres({ points, hauteur = 132, accentDernier = true, legende })
         role="img"
         aria-label={legende ?? points.map((p) => `${p.annee} : ${p.label}`).join(', ')}
         className="flex items-end gap-2"
-        style={{ height: `${hauteur}px` }}
       >
         {points.map((point, index) => {
           const dernier = index === points.length - 1
-          const part = Math.max((point.valeur / max) * 100, 2)
+          const hauteurBarre =
+            point.valeur > 0
+              ? Math.max(Math.round((point.valeur / max) * zone), BARRE_MIN_PX)
+              : 0
 
           return (
-            <div key={point.annee} className="flex h-full flex-1 flex-col justify-end" style={{ maxWidth: `${largeur * 1.6}%` }}>
-              <span className="mb-1.5 text-center font-mono text-[0.56rem] text-marine/55">
+            <div key={point.annee} className="flex flex-1 flex-col justify-end">
+              <span className="mb-1 block text-center font-mono text-[0.56rem] leading-none text-marine/55">
                 {point.label}
               </span>
+              {/* La zone de tracé, de hauteur fixe : c'est elle qui garantit
+                  que deux barres de la même figure se comparent, et que la
+                  figure occupe la même place quelle que soit la série. */}
               <span
                 aria-hidden="true"
-                className="block w-full rounded-t-[3px]"
-                style={{
-                  height: `${part}%`,
-                  backgroundColor: accentDernier && dernier ? CORAIL : MARINE,
-                  opacity: accentDernier && dernier ? 1 : 0.18 + (index / points.length) * 0.5,
-                }}
-              />
-              <span className="mt-1.5 text-center font-mono text-[0.56rem] uppercase tracking-micro text-marine/40">
+                className="flex w-full items-end"
+                style={{ height: `${zone}px` }}
+              >
+                <span
+                  className="block w-full rounded-t-[3px]"
+                  style={{
+                    height: `${hauteurBarre}px`,
+                    backgroundColor: accentDernier && dernier ? CORAIL : MARINE,
+                    opacity: accentDernier && dernier ? 1 : 0.22 + (index / points.length) * 0.5,
+                  }}
+                />
+              </span>
+              <span className="mt-1.5 block text-center font-mono text-[0.56rem] uppercase leading-none tracking-micro text-marine/40">
                 {point.annee}
               </span>
             </div>
