@@ -39,18 +39,23 @@ import { IGN_ATTRIBUTION, PLAN_MAX_NATIVE_ZOOM, PLAN_TILE_URL } from '../../lib/
  * Couleurs des catégories — palette Barnes, reprise de `tailwind.config.js`.
  *
  * Trois teintes franchement distinctes, et distinctes aussi en niveaux de gris :
- * un rapport imprimé sur une imprimante noir et blanc doit rester lisible, et
- * le marine, le doré et le corail s'y séparent par leur valeur autant que par
- * leur teinte.
+ * un rapport imprimé sur une imprimante noir et blanc doit rester lisible.
+ *
+ * La mise en charte a resserré la palette de tout l'outil sur trois couleurs,
+ * ce qui menaçait précisément cette carte : le doré et le corail devenaient le
+ * même rouge, et deux des trois catégories auraient été indiscernables. Le
+ * troisième ton est donc pris dans la charte elle-même — `--grey-500` (#808080),
+ * la teinte de navigation du site. Encre, gris moyen et rouge : trois valeurs
+ * nettement séparées, sur écran comme en noir et blanc.
  */
 const COULEURS = {
-  transports: '#12294A', // marine
-  ecoles: '#B08D57', // brass
-  commerces: '#D24B3E', // corail
+  transports: '#3C3C3C', // encre
+  ecoles: '#808080', // ardoise
+  commerces: '#B4002F', // rouge Barnes
 }
 
 /** Teinte des catégories qu'une évolution d'`poi.js` ajouterait sans passer ici. */
-const COULEUR_PAR_DEFAUT = '#5A6478'
+const COULEUR_PAR_DEFAUT = '#ABABAB'
 
 export const couleurCategorie = (id) => COULEURS[id] ?? COULEUR_PAR_DEFAUT
 
@@ -104,11 +109,11 @@ export function CarteCommodites({ carte }) {
     // Le disque parcouru, tracé avant les points pour rester sous eux.
     const disque = L.circle([lat, lon], {
       radius: rayonM ?? 500,
-      color: '#12294A',
+      color: '#3C3C3C',
       weight: 1,
       opacity: 0.35,
       dashArray: '4 4',
-      fillColor: '#12294A',
+      fillColor: '#3C3C3C',
       fillOpacity: 0.04,
       interactive: false,
     }).addTo(map)
@@ -127,7 +132,7 @@ export function CarteCommodites({ carte }) {
       }).addTo(map)
     }
 
-    // Le bien, posé en dernier : il passe devant tout le reste. Losange doré
+    // Le bien, posé en dernier : il passe devant tout le reste. Losange rouge
     // cerné d'encre — la même signalétique que le repère d'adresse de la carte
     // de repérage, en plus affirmé, parce qu'il doit se distinguer d'une
     // vingtaine de pastilles.
@@ -138,7 +143,7 @@ export function CarteCommodites({ carte }) {
         className: '',
         html:
           '<span style="display:block;width:14px;height:14px;transform:rotate(45deg);' +
-          'background:#B08D57;border:2px solid #10141C;box-shadow:0 0 0 2px rgba(255,255,255,0.9)"></span>',
+          'background:#B4002F;border:2px solid #3C3C3C;box-shadow:0 0 0 2px rgba(255,255,255,0.9)"></span>',
         iconSize: [14, 14],
         iconAnchor: [7, 7],
       }),

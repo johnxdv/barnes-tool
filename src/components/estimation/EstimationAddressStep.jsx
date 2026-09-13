@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Building2, Check, Home, TreeDeciduous } from 'lucide-react'
 import { AddressAutocomplete } from './AddressAutocomplete'
 import { GrowingIcons } from '../ui/GrowingIcons'
+import { LogoBarnes } from '../ui/LogoBarnes'
 
 /**
  * Immeuble, maison puis arbre : trois échelles du bâti qui poussent du sol
@@ -46,6 +47,28 @@ export function EstimationAddressStep({ onBack, onConfirm }) {
 
   return (
     <div className="w-full max-w-xl">
+      {/* L'écusson, en haut à droite de la fenêtre — `fixed` et non posé dans la
+          colonne : c'est un coin d'écran qu'on lui demande, pas le haut d'une
+          carte centrée qui se déplacerait avec elle.
+
+          Petit format assumé (48 px, 56 px au-delà du mobile). Un écusson à
+          cette échelle se reconnaît sans se faire regarder, et c'est ce qu'on
+          attend d'une marque sur un outil de travail : qu'elle signe l'écran
+          sans le présider.
+
+          `arrivee` lui fait tomber les quelques pixels de son entrée, et le
+          sautillement prend la suite sans rupture — les deux animations
+          finissent à `translateY(0)`. Les deux partent au premier rendu de
+          l'écran, donc au tout début de son animation d'entrée.
+
+          `z-40` le place sous la barre de progression globale (`z-70`) : celle-ci
+          traverse le haut de la fenêtre et doit rester entière. */}
+      <LogoBarnes
+        mouvement="saut"
+        arrivee
+        className="fixed right-5 top-6 z-40 h-12 w-12 sm:right-8 sm:top-8 sm:h-14 sm:w-14"
+      />
+
       {onBack ? (
         <button
           type="button"

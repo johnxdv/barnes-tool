@@ -69,11 +69,15 @@ function Tendance({ sens, className = 'h-3.5 w-3.5' }) {
 
 export function PageCouverture({ couverture }) {
   return (
-    <PageRapport sombre>
+    <PageRapport couverture>
       <div className="flex flex-1 flex-col justify-between py-4">
         <div>
-          <p className="font-mono text-[0.62rem] uppercase tracking-[0.42em] text-brass">Barnes</p>
-          <span aria-hidden="true" className="mt-5 block h-px w-16 bg-brass/50" />
+          {/* La signature. `tracking-embleme` (3 px) est la plus forte des trois
+              valeurs d'interlettrage relevées sur le site, et elle n'est
+              employée qu'ici : le mot « Barnes » posé seul, en tête de
+              document. */}
+          <p className="font-mono text-[0.62rem] uppercase tracking-embleme text-barnes">Barnes</p>
+          <span aria-hidden="true" className="mt-5 block h-[2px] w-16 rounded-full bg-barnes" />
         </div>
 
         <div>
@@ -88,41 +92,41 @@ export function PageCouverture({ couverture }) {
             valeur={couverture.adresse}
             as="h1"
             multiligne
-            className="mt-5 block font-display text-[2.5rem] font-semibold leading-[1.08] text-white"
+            className="mt-5 block font-display text-[2.5rem] font-semibold leading-[1.08] text-marine"
           />
           {couverture.ville ? (
             <ChampModifiable
               cle="couverture.ville"
               valeur={couverture.ville}
               as="p"
-              className="mt-3 block font-display text-[1.15rem] font-normal text-white/60"
+              className="mt-3 block font-display text-[1.15rem] font-normal text-marine/55"
             />
           ) : null}
 
-          <span aria-hidden="true" className="mt-8 block h-px w-full bg-white/12" />
+          <span aria-hidden="true" className="mt-8 block h-px w-full bg-marine/12" />
 
           <ChampModifiable
             cle="couverture.chapeau"
             valeur="Estimation établie à partir des ventes réalisées dans le secteur, des caractéristiques déclarées du bien et des données publiques du marché immobilier."
             as="p"
             multiligne
-            className="mt-6 block max-w-md text-[0.85rem] leading-relaxed text-white/55"
+            className="mt-6 block max-w-md text-[0.85rem] leading-relaxed text-marine/60"
           />
         </div>
 
         <div className="flex items-end justify-between gap-6">
           <div>
-            <p className="font-mono text-[0.55rem] uppercase tracking-micro text-white/35">
+            <p className="font-mono text-[0.55rem] uppercase tracking-micro text-marine/40">
               Établi le
             </p>
             <ChampModifiable
               cle="couverture.date"
               valeur={couverture.date}
               as="p"
-              className="mt-1.5 block font-display text-[1rem] font-semibold text-white"
+              className="mt-1.5 block font-display text-[1rem] font-semibold text-marine"
             />
           </div>
-          <p className="max-w-[16rem] text-right text-[0.62rem] leading-relaxed text-white/35">
+          <p className="max-w-[16rem] text-right text-[0.62rem] leading-relaxed text-marine/40">
             Document non contractuel. Le montant indiqué est une estimation, il ne constitue
             ni une expertise judiciaire ni un engagement de prix.
           </p>

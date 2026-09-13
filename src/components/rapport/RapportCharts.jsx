@@ -18,8 +18,8 @@
  * dans le tableau qui accompagne toujours la figure.
  */
 
-const MARINE = '#12294A'
-const CORAIL = '#D24B3E'
+const MARINE = '#3C3C3C'
+const CORAIL = '#B4002F'
 
 /**
  * Barres verticales — historique des ventes, population aux recensements.

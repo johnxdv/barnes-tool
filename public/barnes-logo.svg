@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" fill="none">
+  <title>Barnes International</title>
+  <!--
+    Écusson Barnes — fond transparent, rouge de marque #B4002F, non modifiable.
+
+    ► C'est LE point de remplacement. Tout l'outil — écran d'adresse, formulaire
+      de caractéristiques, chaque page du rapport imprimé — affiche ce fichier et
+      lui seul, via `src/components/ui/LogoBarnes.jsx`. Déposer ici le fichier
+      officiel (même nom, SVG ou PNG transparent) le propage partout d'un coup,
+      sans toucher à une ligne de JSX.
+
+    Les lettres sont composées en romane à empattements plutôt que vectorisées :
+    chargé dans une balise `<img>`, un SVG ne peut pas aller chercher de fonte
+    distante — Prata n'y sera donc pas résolue et c'est Georgia, présente
+    partout, qui rend. C'est le seul compromis du tracé.
+  -->
+  <g fill="#B4002F">
+    <!-- Cercle de bordure, et son double intérieur. -->
+    <circle cx="100" cy="100" r="97" fill="none" stroke="#B4002F" stroke-width="2.4" />
+    <circle cx="100" cy="100" r="76" fill="none" stroke="#B4002F" stroke-width="1.4" />
+
+    <!-- Les deux points, à 3 et 9 heures, dans l'intervalle laissé entre les
+         deux inscriptions. -->
+    <circle cx="187" cy="100" r="2.8" />
+    <circle cx="13" cy="100" r="2.8" />
+
+    <!-- Arcs de composition. Le supérieur court de gauche à droite en passant
+         par le haut (φ croissant, sweep 1), l'inférieur de gauche à droite en
+         passant par le bas (φ décroissant, sweep 0) : les deux inscriptions se
+         lisent ainsi dans le même sens, capitales tournées vers le centre.
+
+         Les deux rayons diffèrent, et ce n'est pas une négligence. Sur un arc,
+         les lettres se dressent du côté extérieur du tracé : en haut, elles
+         montent vers le bord ; en bas, elles descendent vers le centre. Le
+         chemin haut est donc posé en deçà de la bande (r = 77, hauteur de
+         capitale ≈ 17,5 → sommet à 94,5, sous le cercle de bordure), le chemin
+         bas au-delà (r = 89, capitales à 78,5, au-dessus du cercle intérieur).
+         Un rayon commun ferait déborder l'une des deux inscriptions. -->
+    <path id="arc-haut" d="M 24.97 82.67 A 77 77 0 0 1 175.03 82.67" fill="none" />
+    <path id="arc-bas" d="M 13.28 120.03 A 89 89 0 0 0 186.72 120.03" fill="none" />
+
+    <text font-family="Prata, Georgia, 'Times New Roman', serif" font-size="25" letter-spacing="6">
+      <textPath href="#arc-haut" startOffset="50%" text-anchor="middle">BARNES</textPath>
+    </text>
+    <text font-family="Prata, Georgia, 'Times New Roman', serif" font-size="15" letter-spacing="3.5">
+      <textPath href="#arc-bas" startOffset="50%" text-anchor="middle">INTERNATIONAL</textPath>
+    </text>
+
+    <!-- Monogramme, ramené à 88 % autour du centre : à pleine taille il touchait
+         presque le cercle intérieur, et l'écusson n'avait plus de respiration.
+         Le filet vertical détaché, puis le B — contour extérieur et les deux
+         contrepoinçons dans le même tracé, évidés en `evenodd`. -->
+    <g transform="translate(100 100) scale(0.88) translate(-100 -100)">
+    <rect x="58" y="46" width="4.2" height="95" />
+    <path
+      fill-rule="evenodd"
+      d="M 72 46 h 36 c 18 0 28 8.5 28 22.5 0 10.5 -6 17.5 -16.5 20.5 12.5 3 20 11.5 20 24 0 15.5 -11.5 28 -31 28 H 72 Z
+         M 86.5 58.5 v 25 h 20 c 10.5 0 16.5 -4.5 16.5 -12.5 0 -8 -6 -12.5 -16.5 -12.5 Z
+         M 86.5 96 v 32.5 h 22 c 11.5 0 18 -5.5 18 -16.5 0 -10.5 -6.5 -16 -18 -16 Z"
+    />
+    <!-- Empattements du fût, qui débordent à gauche sur le filet. -->
+    <rect x="66" y="46" width="20.5" height="3.4" />
+    <rect x="66" y="137.6" width="20.5" height="3.4" />
+    </g>
+  </g>
+</svg>

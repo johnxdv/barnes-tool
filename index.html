@@ -4,13 +4,24 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#10141C" />
+    <meta name="theme-color" content="#B4002F" />
     <meta name="description" content="Barnes — repérage du bien sur vue satellite et analyse." />
 
+    <!-- Les deux familles de barnes-provence-littoral.com, et elles seules :
+         Prata pour les titres, Roboto pour tout le reste — corps de texte,
+         navigation, étiquettes capitales. Le site de référence n'embarque
+         aucune monospace ; la nôtre est donc repointée sur Roboto (voir
+         `fontFamily.mono` dans `tailwind.config.js`), et rien ici n'a à la
+         charger.
+
+         Roboto est demandé en 300 (graisse du corps de texte sur le site), 400
+         (navigation, étiquettes) et 500 (rares mises en avant). Prata n'existe
+         qu'en 400 — sa graisse unique est imposée en CSS pour que le navigateur
+         n'en fabrique pas de fausses (voir `index.css`). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Prata&family=Roboto:wght@300;400;500&display=swap"
       rel="stylesheet"
     />
 

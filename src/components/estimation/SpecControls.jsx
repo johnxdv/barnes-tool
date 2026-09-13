@@ -12,9 +12,13 @@ import { MAX_PHOTOS, lirePhotos } from '../../lib/photos'
  * délibéré (« aucun stationnement ») s'affiche comme un vrai chiffre. Le
  * rapport final pourra donc taire ce qu'on ignore au lieu d'annoncer 0.
  *
- * Aucune couleur n'est écrite ici : chaque contrôle lit `--accent` et
- * `--accent-from`, posés par la colonne qui l'accueille. Le même bouton est
- * marine à gauche et corail à droite, sans une classe de plus.
+ * Presque aucune couleur n'est écrite ici : chaque contrôle lit `--accent` et
+ * `--accent-from`, posés par la colonne qui l'accueille, et prend donc la
+ * teinte de son côté du formulaire sans une classe de plus.
+ *
+ * Une exception, et une seule : `StepButton`. Les « − / + » sont en rouge
+ * Barnes partout, quelle que soit la colonne — voir le commentaire qui
+ * l'accompagne.
  */
 
 /** Libellé de l'état vide, partagé par tous les contrôles. */
@@ -40,9 +44,22 @@ function FieldCard({ label, value, filled, onReset, illustration, illustrationHe
   const reduce = useReducedMotion()
 
   return (
-    <div className="rounded-xl border border-ink/10 bg-white px-4 py-3.5 shadow-[0_10px_28px_-22px_rgba(16,20,28,0.5)] transition-colors duration-300 ease-plan hover:border-ink/20">
+    // Micro-interactions de la carte — la réponse au « trop statique » de cet
+    // écran. Trois propriétés seulement : la carte se soulève de deux pixels,
+    // son ombre se creuse, son liseré prend la couleur de la colonne. Deux
+    // pixels suffisent — seize cartes à l'écran, un mouvement plus ample et la
+    // page entière respirerait sous le curseur.
+    //
+    // `focus-within` répète exactement l'état de survol, ce qui n'est pas un
+    // ornement : une bonne moitié de ce formulaire se remplit au clavier, et
+    // sans lui la carte active serait la seule à ne rien signaler.
+    //
+    // `group/carte` est nommé plutôt qu'anonyme : les contrôles de cette carte
+    // vivent déjà dans d'autres groupes, et un `group` sans nom se ferait
+    // capturer par le plus proche.
+    <div className="group/carte rounded-xl border border-ink/10 bg-white px-4 py-3.5 shadow-[0_10px_28px_-22px_rgba(60,60,60,0.5)] transition-[transform,box-shadow,border-color] duration-300 ease-plan hover:-translate-y-0.5 hover:border-[color:var(--accent)] hover:shadow-[0_18px_36px_-24px_rgba(60,60,60,0.75)] focus-within:-translate-y-0.5 focus-within:border-[color:var(--accent)] focus-within:shadow-[0_18px_36px_-24px_rgba(60,60,60,0.75)]">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="font-mono text-[0.58rem] uppercase tracking-micro text-ink/50">
+        <span className="font-mono text-[0.58rem] uppercase tracking-micro text-ink/50 transition-colors duration-300 ease-plan group-hover/carte:text-[color:var(--accent)] group-focus-within/carte:text-[color:var(--accent)]">
           {label}
         </span>
 
@@ -81,7 +98,13 @@ function FieldCard({ label, value, filled, onReset, illustration, illustrationHe
             // Mise en veille du dessin tant que rien n'est déclaré. Simple
             // transition CSS : seize cartes à l'écran, autant de composants
             // animés en moins, et une opacité qui aboutit quoi qu'il arrive.
-            'transition-opacity duration-300 ease-plan',
+            //
+            // Le très léger agrandissement au survol s'y ajoute — trois pour
+            // cent, ce qui se ressent sans se voir. C'est le dessin qui répond
+            // au curseur, pas la carte qui grossit. `origin-bottom` : les
+            // illustrations sont toutes posées au sol, et un agrandissement
+            // centré les décollerait.
+            'origin-bottom transition-[opacity,transform] duration-300 ease-plan group-hover/carte:scale-[1.03]',
             filled ? 'opacity-100' : 'opacity-25',
           ].join(' ')}
         >
@@ -610,8 +633,13 @@ function StepButton({ icon: Icon, label, disabled, onClick, size = 'md' }) {
       whileTap={disabled ? undefined : { scale: 0.86 }}
       whileHover={disabled ? undefined : { scale: 1.06 }}
       transition={TAP}
+      // Seul contrôle de l'écran à échapper à la couleur de sa colonne : les
+      // « − / + » sont en rouge Barnes des deux côtés du formulaire. C'est une
+      // demande de charte, et elle se tient — ces boutons sont le geste le plus
+      // répété de la saisie, et les voir changer de teinte d'une colonne à
+      // l'autre en faisait deux commandes là où il n'y en a qu'une.
       className={[
-        'flex shrink-0 touch-manipulation items-center justify-center rounded-full border border-ink/15 bg-white text-[color:var(--accent)] transition-colors duration-200 ease-plan hover:border-[color:var(--accent)] hover:bg-[color:var(--accent-tint)] disabled:cursor-not-allowed disabled:border-ink/10 disabled:text-ink/20 disabled:hover:bg-white',
+        'flex shrink-0 touch-manipulation items-center justify-center rounded-full border border-barnes/25 bg-white text-barnes transition-colors duration-200 ease-plan hover:border-barnes hover:bg-barnes/[0.07] disabled:cursor-not-allowed disabled:border-ink/10 disabled:text-ink/20 disabled:hover:border-ink/10 disabled:hover:bg-white',
         petit ? 'h-8 w-8' : 'h-10 w-10',
       ].join(' ')}
     >
@@ -734,9 +762,9 @@ export function DpeField({ label, value, onChange }) {
 const DPE_LETTRES = [
   { id: 'A', fond: '#2E8B44', texte: '#FFFFFF' },
   { id: 'B', fond: '#52A83C', texte: '#FFFFFF' },
-  { id: 'C', fond: '#94BF3B', texte: '#10141C' },
-  { id: 'D', fond: '#F0D22A', texte: '#10141C' },
-  { id: 'E', fond: '#EFA82F', texte: '#10141C' },
+  { id: 'C', fond: '#94BF3B', texte: '#3C3C3C' },
+  { id: 'D', fond: '#F0D22A', texte: '#3C3C3C' },
+  { id: 'E', fond: '#EFA82F', texte: '#3C3C3C' },
   { id: 'F', fond: '#E4762C', texte: '#FFFFFF' },
   { id: 'G', fond: '#D33127', texte: '#FFFFFF' },
 ]

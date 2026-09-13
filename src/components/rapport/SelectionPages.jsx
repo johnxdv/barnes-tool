@@ -59,7 +59,7 @@ export function SelectionPages({ pages, exclues, onChange, onFermer, onImprimer 
         initial={{ opacity: 0, y: 12, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-        className="flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_-20px_rgba(16,20,28,0.6)] focus:outline-none"
+        className="flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_-20px_rgba(60,60,60,0.6)] focus:outline-none"
       >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-marine/10 px-5 py-4">
           <div>

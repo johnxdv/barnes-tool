@@ -1,9 +1,9 @@
 // Arc doré unique sur le pourtour : le reste du tour est transparent, ce qui
 // donne une lumière qui tourne plutôt qu'un contour permanent. Le cœur de l'arc
-// monte jusqu'à un doré franc (#F5E3BC) — toujours entre Brass et Warm Stone,
+// monte jusqu'à un doré franc (#F0B1C1) — toujours entre Brass et Warm Stone,
 // donc dans la charte — pour rester lisible sur fond clair comme sur fond sombre.
 const GOLD_ARC =
-  'bg-[conic-gradient(from_0deg,transparent_0%,transparent_28%,#B08D57_46%,#E8C88A_64%,#F5E3BC_73%,#E8C88A_82%,#B08D57_92%,transparent_100%)]'
+  'bg-[conic-gradient(from_0deg,transparent_0%,transparent_28%,#B4002F_46%,#D25878_64%,#F0B1C1_73%,#D25878_82%,#B4002F_92%,transparent_100%)]'
 
 /**
  * Liseré doré tournant, à poser derrière un élément opaque : le cadre est

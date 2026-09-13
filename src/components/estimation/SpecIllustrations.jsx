@@ -222,10 +222,10 @@ export function TerrainIllustration({ value = 0, max = 5000 }) {
       {/* Maison-étalon, immobile au centre. */}
       <g transform="translate(120 0)">
         <rect x="-13" y="-22" width="26" height="22" fill="currentColor" />
-        <path d="M-17 -21 L0 -34 L17 -21 Z" fill="#B08D57" />
-        <rect x="-4" y="-13" width="8" height="13" rx="1" fill="#EDEAE3" />
-        <rect x="-10" y="-18" width="5" height="5" rx="1" fill="#EDEAE3" />
-        <rect x="5" y="-18" width="5" height="5" rx="1" fill="#EDEAE3" />
+        <path d="M-17 -21 L0 -34 L17 -21 Z" fill="#B4002F" />
+        <rect x="-4" y="-13" width="8" height="13" rx="1" fill="#F5F5F5" />
+        <rect x="-10" y="-18" width="5" height="5" rx="1" fill="#F5F5F5" />
+        <rect x="5" y="-18" width="5" height="5" rx="1" fill="#F5F5F5" />
       </g>
     </Scene>
   )
@@ -258,7 +258,7 @@ export function TerrasseIllustration({ value = 0, max = 200 }) {
     <Scene>
       {/* Façade : la terrasse est adossée à quelque chose, elle ne flotte pas. */}
       <rect x="16" y="-52" width="26" height="52" fill="currentColor" fillOpacity="0.9" />
-      <rect x="22" y="-44" width="14" height="20" rx="1" fill="#EDEAE3" />
+      <rect x="22" y="-44" width="14" height="20" rx="1" fill="#F5F5F5" />
 
       <AnimatedRect
         x={left}
@@ -266,7 +266,7 @@ export function TerrasseIllustration({ value = 0, max = 200 }) {
         width={width}
         height="9"
         rx="2"
-        fill="#B08D57"
+        fill="#B4002F"
         fillOpacity="0.55"
       />
 
@@ -309,13 +309,13 @@ export function TerrasseIllustration({ value = 0, max = 200 }) {
         {value >= TERRASSE_PARASOL ? (
           <Furniture key="parasol" x={left + 44}>
             <rect x="-1" y="-46" width="2" height="30" fill="currentColor" fillOpacity="0.8" />
-            <path d="M-19 -40 Q0 -54 19 -40 Q0 -35 -19 -40 Z" fill="#B08D57" />
+            <path d="M-19 -40 Q0 -54 19 -40 Q0 -35 -19 -40 Z" fill="#B4002F" />
           </Furniture>
         ) : null}
 
         {value >= TERRASSE_TRANSAT ? (
           <Furniture key="transat" x={left + 92}>
-            <path d="M-14 -6 H8 L14 -18 H-8 Z" fill="#B08D57" fillOpacity="0.85" />
+            <path d="M-14 -6 H8 L14 -18 H-8 Z" fill="#B4002F" fillOpacity="0.85" />
             <rect x="-14" y="-6" width="24" height="2.5" rx="1" fill="currentColor" />
             <rect x="-12" y="-4" width="1.5" height="4" fill="currentColor" fillOpacity="0.6" />
             <rect x="7" y="-4" width="1.5" height="4" fill="currentColor" fillOpacity="0.6" />
@@ -395,12 +395,12 @@ function BatiAncien() {
   return (
     <g transform="translate(120 0)">
       <rect x="-34" y="-38" width="68" height="38" fill="currentColor" />
-      <path d="M-40 -37 L0 -58 L40 -37 Z" fill="#B08D57" />
+      <path d="M-40 -37 L0 -58 L40 -37 Z" fill="#B4002F" />
       <rect x="-34" y="-38" width="6" height="38" fill="currentColor" fillOpacity="0.55" />
       <rect x="28" y="-38" width="6" height="38" fill="currentColor" fillOpacity="0.55" />
-      <rect x="-6" y="-20" width="12" height="20" rx="1" fill="#EDEAE3" />
-      <rect x="-24" y="-30" width="9" height="11" rx="1" fill="#EDEAE3" />
-      <rect x="15" y="-30" width="9" height="11" rx="1" fill="#EDEAE3" />
+      <rect x="-6" y="-20" width="12" height="20" rx="1" fill="#F5F5F5" />
+      <rect x="-24" y="-30" width="9" height="11" rx="1" fill="#F5F5F5" />
+      <rect x="15" y="-30" width="9" height="11" rx="1" fill="#F5F5F5" />
       <rect x="14" y="-70" width="8" height="14" fill="currentColor" />
     </g>
   )
@@ -410,19 +410,19 @@ function BatiAncien() {
 function BatiHaussmannien() {
   return (
     <g transform="translate(120 0)">
-      <path d="M-32 -52 L-26 -66 L26 -66 L32 -52 Z" fill="#B08D57" />
+      <path d="M-32 -52 L-26 -66 L26 -66 L32 -52 Z" fill="#B4002F" />
       <rect x="-32" y="-52" width="64" height="52" fill="currentColor" />
-      <rect x="-32" y="-34" width="64" height="1.6" fill="#B08D57" fillOpacity="0.9" />
+      <rect x="-32" y="-34" width="64" height="1.6" fill="#B4002F" fillOpacity="0.9" />
       {[-24, -8, 8].map((x) => (
-        <rect key={`h${x}`} x={x} y="-48" width="10" height="12" rx="1" fill="#EDEAE3" />
+        <rect key={`h${x}`} x={x} y="-48" width="10" height="12" rx="1" fill="#F5F5F5" />
       ))}
       {[-24, -8, 8].map((x) => (
-        <rect key={`b${x}`} x={x} y="-28" width="10" height="12" rx="1" fill="#EDEAE3" />
+        <rect key={`b${x}`} x={x} y="-28" width="10" height="12" rx="1" fill="#F5F5F5" />
       ))}
-      <rect x="20" y="-48" width="6" height="12" rx="1" fill="#EDEAE3" fillOpacity="0.7" />
-      <rect x="20" y="-28" width="6" height="12" rx="1" fill="#EDEAE3" fillOpacity="0.7" />
-      <path d="M-30 -60 h8" stroke="#EDEAE3" strokeOpacity="0.6" strokeWidth="2" />
-      <rect x="-7" y="-13" width="14" height="13" rx="1" fill="#EDEAE3" />
+      <rect x="20" y="-48" width="6" height="12" rx="1" fill="#F5F5F5" fillOpacity="0.7" />
+      <rect x="20" y="-28" width="6" height="12" rx="1" fill="#F5F5F5" fillOpacity="0.7" />
+      <path d="M-30 -60 h8" stroke="#F5F5F5" strokeOpacity="0.6" strokeWidth="2" />
+      <rect x="-7" y="-13" width="14" height="13" rx="1" fill="#F5F5F5" />
     </g>
   )
 }
@@ -434,13 +434,13 @@ function BatiArtDeco() {
       <rect x="-30" y="-44" width="60" height="44" fill="currentColor" />
       <rect x="-20" y="-54" width="40" height="12" fill="currentColor" fillOpacity="0.92" />
       <rect x="-10" y="-62" width="20" height="10" fill="currentColor" fillOpacity="0.85" />
-      <rect x="-2" y="-70" width="4" height="9" fill="#B08D57" />
+      <rect x="-2" y="-70" width="4" height="9" fill="#B4002F" />
       {[-24, -13, 9, 20].map((x) => (
-        <rect key={x} x={x} y="-40" width="7" height="26" rx="1" fill="#EDEAE3" />
+        <rect key={x} x={x} y="-40" width="7" height="26" rx="1" fill="#F5F5F5" />
       ))}
-      <rect x="-6" y="-50" width="12" height="8" rx="1" fill="#EDEAE3" fillOpacity="0.75" />
-      <rect x="-30" y="-12" width="60" height="1.8" fill="#B08D57" fillOpacity="0.8" />
-      <rect x="-7" y="-11" width="14" height="11" rx="1" fill="#EDEAE3" />
+      <rect x="-6" y="-50" width="12" height="8" rx="1" fill="#F5F5F5" fillOpacity="0.75" />
+      <rect x="-30" y="-12" width="60" height="1.8" fill="#B4002F" fillOpacity="0.8" />
+      <rect x="-7" y="-11" width="14" height="11" rx="1" fill="#F5F5F5" />
     </g>
   )
 }
@@ -459,12 +459,12 @@ function BatiModerne() {
             y={-37 + row * 11}
             width="10"
             height="7"
-            fill="#EDEAE3"
+            fill="#F5F5F5"
             fillOpacity={0.9 - row * 0.12}
           />
         )),
       )}
-      <rect x="-6" y="-11" width="12" height="11" rx="0.5" fill="#EDEAE3" />
+      <rect x="-6" y="-11" width="12" height="11" rx="0.5" fill="#F5F5F5" />
     </g>
   )
 }
@@ -474,13 +474,13 @@ function BatiPavillon() {
   return (
     <g transform="translate(120 0)">
       <rect x="20" y="-24" width="30" height="24" fill="currentColor" fillOpacity="0.85" />
-      <path d="M16 -23 L35 -34 L54 -23 Z" fill="#B08D57" fillOpacity="0.85" />
-      <rect x="25" y="-19" width="20" height="19" rx="1" fill="#EDEAE3" fillOpacity="0.75" />
+      <path d="M16 -23 L35 -34 L54 -23 Z" fill="#B4002F" fillOpacity="0.85" />
+      <rect x="25" y="-19" width="20" height="19" rx="1" fill="#F5F5F5" fillOpacity="0.75" />
       <rect x="-46" y="-32" width="66" height="32" fill="currentColor" />
-      <path d="M-52 -31 L-36 -46 L4 -46 L20 -31 Z" fill="#B08D57" />
-      <rect x="-20" y="-18" width="13" height="18" rx="1" fill="#EDEAE3" />
-      <rect x="-40" y="-26" width="12" height="11" rx="1" fill="#EDEAE3" />
-      <rect x="0" y="-26" width="12" height="11" rx="1" fill="#EDEAE3" />
+      <path d="M-52 -31 L-36 -46 L4 -46 L20 -31 Z" fill="#B4002F" />
+      <rect x="-20" y="-18" width="13" height="18" rx="1" fill="#F5F5F5" />
+      <rect x="-40" y="-26" width="12" height="11" rx="1" fill="#F5F5F5" />
+      <rect x="0" y="-26" width="12" height="11" rx="1" fill="#F5F5F5" />
     </g>
   )
 }
@@ -493,10 +493,10 @@ function BatiContemporain() {
       <rect x="-49" y="-31" width="52" height="3.5" rx="1" fill="currentColor" />
       <rect x="-2" y="-50" width="48" height="50" fill="currentColor" />
       <rect x="-5" y="-53" width="54" height="3.5" rx="1" fill="currentColor" />
-      <rect x="4" y="-44" width="34" height="16" rx="1" fill="#EDEAE3" />
-      <rect x="4" y="-22" width="16" height="22" rx="1" fill="#EDEAE3" />
-      <rect x="-40" y="-22" width="30" height="14" rx="1" fill="#EDEAE3" fillOpacity="0.85" />
-      <path d="M6 -57 L26 -57 L22 -63 L2 -63 Z" fill="#B08D57" />
+      <rect x="4" y="-44" width="34" height="16" rx="1" fill="#F5F5F5" />
+      <rect x="4" y="-22" width="16" height="22" rx="1" fill="#F5F5F5" />
+      <rect x="-40" y="-22" width="30" height="14" rx="1" fill="#F5F5F5" fillOpacity="0.85" />
+      <path d="M6 -57 L26 -57 L22 -63 L2 -63 Z" fill="#B4002F" />
       <circle cx="-24" cy="-4" r="3.5" fill="#1F3B2E" fillOpacity="0.7" />
     </g>
   )
@@ -600,7 +600,7 @@ export function ChambresIllustration({ count = 0 }) {
     <g>
       <rect x="0" y="-26" width="6" height="26" rx="1.5" fill="currentColor" />
       <rect x="4" y="-12" width="38" height="10" rx="2" fill="currentColor" fillOpacity="0.22" />
-      <rect x="16" y="-16" width="26" height="5" rx="2" fill="#B08D57" />
+      <rect x="16" y="-16" width="26" height="5" rx="2" fill="#B4002F" />
       <rect
         x="7"
         y="-16"
@@ -637,7 +637,7 @@ export function SdbIllustration({ count = 0 }) {
       <path
         d="M5 -28 V-34 h9"
         fill="none"
-        stroke="#B08D57"
+        stroke="#B4002F"
         strokeWidth="2.5"
         strokeLinecap="round"
       />
@@ -657,7 +657,7 @@ export function SdbIllustration({ count = 0 }) {
       <path
         d="M8 -21 q4 -2.5 8 0 t8 0 t8 0"
         fill="none"
-        stroke="#EDEAE3"
+        stroke="#F5F5F5"
         strokeWidth="1.6"
         strokeLinecap="round"
       />
@@ -701,7 +701,7 @@ export function SalleEauIllustration({ count = 0 }) {
         strokeWidth="1.5"
       />
       <rect x="16.5" y="-52" width="3" height="8" fill="currentColor" fillOpacity="0.8" />
-      <path d="M10 -44 H26 L23 -40 H13 Z" fill="#B08D57" />
+      <path d="M10 -44 H26 L23 -40 H13 Z" fill="#B4002F" />
       {mouille
         ? [0, 1, 2].map((drop) => (
             <motion.circle
@@ -761,13 +761,13 @@ function Etage({ index, y, fillOpacity }) {
       />
       {index === 0 ? (
         <>
-          <rect x="115" y={y + 3} width="10" height={ETAGE_H - 3} rx="1" fill="#EDEAE3" />
-          <rect x="99" y={y + 3} width="9" height="5" fill="#EDEAE3" fillOpacity="0.8" />
-          <rect x="132" y={y + 3} width="9" height="5" fill="#EDEAE3" fillOpacity="0.8" />
+          <rect x="115" y={y + 3} width="10" height={ETAGE_H - 3} rx="1" fill="#F5F5F5" />
+          <rect x="99" y={y + 3} width="9" height="5" fill="#F5F5F5" fillOpacity="0.8" />
+          <rect x="132" y={y + 3} width="9" height="5" fill="#F5F5F5" fillOpacity="0.8" />
         </>
       ) : (
         [99, 115.5, 132].map((x) => (
-          <rect key={x} x={x} y={y + 3} width="9" height="5" fill="#EDEAE3" fillOpacity="0.85" />
+          <rect key={x} x={x} y={y + 3} width="9" height="5" fill="#F5F5F5" fillOpacity="0.85" />
         ))
       )}
     </>
@@ -794,7 +794,7 @@ export function NiveauxIllustration({ count = 0 }) {
             width={IMMEUBLE_W + 8}
             height="5"
             rx="1.5"
-            fill="#B08D57"
+            fill="#B4002F"
           />
         </g>
       </Scene>
@@ -832,7 +832,7 @@ export function NiveauxIllustration({ count = 0 }) {
           width={IMMEUBLE_W + 8}
           height="5"
           rx="1.5"
-          fill="#B08D57"
+          fill="#B4002F"
         />
       </motion.g>
     </Scene>
@@ -870,7 +870,7 @@ export function EtageIllustration({ value = 0 }) {
           width={IMMEUBLE_W + 8}
           height="5"
           rx="1.5"
-          fill="#B08D57"
+          fill="#B4002F"
           fillOpacity="0.4"
         />
 
@@ -888,7 +888,7 @@ export function EtageIllustration({ value = 0 }) {
             width="9"
             height="4"
             rx="2"
-            fill="#B08D57"
+            fill="#B4002F"
           />
         </motion.g>
       </motion.g>
@@ -906,13 +906,13 @@ function Voiture() {
   return (
     <g>
       <path d="M6 -13 L10 -21 H24 L29 -13 Z" fill="currentColor" fillOpacity="0.55" />
-      <path d="M11.5 -14.5 L14 -19 H22.5 L25.5 -14.5 Z" fill="#EDEAE3" fillOpacity="0.9" />
+      <path d="M11.5 -14.5 L14 -19 H22.5 L25.5 -14.5 Z" fill="#F5F5F5" fillOpacity="0.9" />
       <rect x="0" y="-14" width="36" height="9" rx="3.5" fill="currentColor" />
-      <circle cx="9" cy="-4" r="3.4" fill="#10141C" />
-      <circle cx="27" cy="-4" r="3.4" fill="#10141C" />
-      <circle cx="9" cy="-4" r="1.2" fill="#EDEAE3" fillOpacity="0.7" />
-      <circle cx="27" cy="-4" r="1.2" fill="#EDEAE3" fillOpacity="0.7" />
-      <rect x="32" y="-12" width="4" height="2.5" rx="1" fill="#B08D57" />
+      <circle cx="9" cy="-4" r="3.4" fill="#3C3C3C" />
+      <circle cx="27" cy="-4" r="3.4" fill="#3C3C3C" />
+      <circle cx="9" cy="-4" r="1.2" fill="#F5F5F5" fillOpacity="0.7" />
+      <circle cx="27" cy="-4" r="1.2" fill="#F5F5F5" fillOpacity="0.7" />
+      <rect x="32" y="-12" width="4" height="2.5" rx="1" fill="#B4002F" />
     </g>
   )
 }
@@ -1041,7 +1041,7 @@ export function ParkingIntIllustration({ count = 0 }) {
           y={-38}
           width={Math.max(0, span - 12)}
           height="1.5"
-          fill="#B08D57"
+          fill="#B4002F"
           fillOpacity="0.6"
         />
 
@@ -1110,7 +1110,7 @@ export function PiscineIllustration({ active }) {
               key={wave}
               d={`M76 ${28 + wave * 7} q7 -3.5 14 0 t14 0 t14 0 t14 0 t14 0`}
               fill="none"
-              stroke="#EDEAE3"
+              stroke="#F5F5F5"
               strokeOpacity={0.55 - wave * 0.2}
               strokeWidth="1.6"
               strokeLinecap="round"

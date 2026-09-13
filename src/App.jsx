@@ -251,7 +251,22 @@ export default function App() {
           l'impression — fond, marges, centrage vertical : sur papier, seules
           les feuilles du rapport subsistent (voir `@media print` dans
           `index.css`). */}
-      <section className="flex min-h-screen flex-col items-center bg-stone px-5 py-20 sm:px-8 sm:py-24 print:block print:min-h-0 print:bg-white print:p-0">
+      {/* Le fond du rapport est plus sombre que celui du parcours, et c'est une
+          conséquence directe de la mise en charte : les feuilles ont pris le
+          fond du site (#F5F5F5), qui était jusqu'ici celui du parcours — posées
+          dessus, elles cessaient de se lire comme des feuilles. Le gris retenu
+          est le `--grey-200` du site (#DEDEDE), assez creusé pour détacher la
+          feuille, assez proche pour ne pas la trancher.
+
+          C'est un réglage d'écran seulement : à l'impression, la feuille *est*
+          la page, il n'y a plus rien autour, et `print:bg-transparent` laisse
+          passer le fond papier posé sur le `body` (voir `@media print` dans
+          `index.css`). Un fond blanc posé ici le recouvrirait. */}
+      <section
+        className={`flex min-h-screen flex-col items-center px-5 py-20 sm:px-8 sm:py-24 print:block print:min-h-0 print:bg-transparent print:p-0 ${
+          step === 'rapport' ? 'bg-[#DEDEDE]' : 'bg-stone'
+        }`}
+      >
         {/* Transition entre étapes sans animation au niveau de la page : chaque
             écran garde ses propres animations Framer Motion internes, mais un
             wrapper animé ici se figeait par intermittence (écran d'analyse à

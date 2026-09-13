@@ -19,8 +19,8 @@ export function GrowthArrowIcon({ className = '' }) {
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#F5E3BC" />
-          <stop offset="100%" stopColor="#B08D57" />
+          <stop offset="0%" stopColor="#F0B1C1" />
+          <stop offset="100%" stopColor="#B4002F" />
         </linearGradient>
       </defs>
 

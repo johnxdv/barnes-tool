@@ -1,7 +1,8 @@
 import { Children, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Building2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { GoldFrame, Shine } from '../ui/GoldFrame'
+import { CocheCertification, LogoBarnes } from '../ui/LogoBarnes'
 import { HouseIllustration } from './HouseIllustration'
 import {
   ChambresIllustration,
@@ -75,27 +76,32 @@ import {
  */
 
 /**
- * Couples de couleurs des deux colonnes, repris de l'identité Barnes (rapports
- * d'estimation PDF) — mêmes valeurs que `marine` et `corail` dans
- * `tailwind.config.js`, à garder en phase.
+ * Couples de couleurs des deux colonnes — mêmes valeurs que `marine` et
+ * `corail` dans `tailwind.config.js`, à garder en phase.
+ *
+ * Depuis la mise en charte, ces deux-là ne sont plus le bleu marine et le rouge
+ * corail des anciens rapports : ce sont les deux seules couleurs que
+ * barnes-provence-littoral.com emploie pour du texte — l'encre `#3C3C3C` et le
+ * rouge `#B4002F`. La distinction des deux colonnes survit donc (un côté
+ * neutre, un côté accent) sans qu'aucune teinte hors charte subsiste.
  *
  * `accent` porte le trait, `from` l'amorce du dégradé de piste des curseurs,
  * `tint` le survol des boutons. Ils sont posés en variables CSS sur la colonne :
  * les contrôles n'écrivent aucune couleur, ils héritent de celle de leur
- * colonne.
+ * colonne — à l'exception des « − / + », rouges partout (voir `StepButton`).
  */
 const COLONNES = {
   bien: {
     titre: 'Votre bien',
-    accent: '#12294A',
-    from: '#4A6B99',
-    tint: 'rgba(18, 41, 74, 0.06)',
+    accent: '#3C3C3C',
+    from: '#9A9A9A',
+    tint: 'rgba(60, 60, 60, 0.06)',
   },
   bati: {
     titre: 'Informations sur le bâti',
-    accent: '#D24B3E',
-    from: '#F0A192',
-    tint: 'rgba(210, 75, 62, 0.07)',
+    accent: '#B4002F',
+    from: '#E1859D',
+    tint: 'rgba(180, 0, 47, 0.07)',
   },
 }
 
@@ -283,11 +289,24 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
       </button>
 
       <div className="animate-fade-up text-center">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-ink text-brass">
-          <Building2 className="h-7 w-7" strokeWidth={1.5} aria-hidden="true" />
+        {/* L'écusson au-dessus du titre, à la place de la pastille d'icône que
+            portait cet écran, et le tampon de certification à sa droite.
+
+            Le sautillement est ici `saut-doux` et non le `saut` de l'écran
+            d'adresse : deux fois plus lent, trois fois moins ample. Là-bas le
+            logo est seul en haut d'une page vide ; ici il surmonte un titre et
+            quinze cartes de saisie, où le même ressort passerait du charme au
+            tic.
+
+            Le tampon, lui, ne joue qu'une fois — c'est le propre d'une
+            certification. `-ml-1` le fait mordre légèrement sur l'écusson,
+            comme un cachet apposé par-dessus. */}
+        <span className="mx-auto flex w-fit items-center justify-center gap-1">
+          <LogoBarnes mouvement="saut-doux" className="h-14 w-14" />
+          <CocheCertification className="-ml-1 mt-5 h-6 w-6 shrink-0" />
         </span>
 
-        <h1 className="mt-6 font-display text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">
+        <h1 className="mt-5 font-display text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">
           Les caractéristiques de votre bien
         </h1>
         <p className="mx-auto mt-3 max-w-lg text-base leading-relaxed text-ink/55">
@@ -540,7 +559,7 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
             type="submit"
             whileTap={{ scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            className="group relative flex w-full touch-manipulation items-center justify-center overflow-hidden rounded-xl bg-ink px-5 py-4 shadow-[0_8px_20px_-10px_rgba(16,20,28,0.55),0_0_10px_-5px_rgba(176,141,87,0.7)] transition-shadow duration-300 ease-plan hover:shadow-[0_10px_24px_-10px_rgba(16,20,28,0.6),0_0_14px_-4px_rgba(176,141,87,0.85)]"
+            className="group relative flex w-full touch-manipulation items-center justify-center overflow-hidden rounded-xl bg-ink px-5 py-4 shadow-[0_8px_20px_-10px_rgba(60,60,60,0.55),0_0_10px_-5px_rgba(176,141,87,0.7)] transition-shadow duration-300 ease-plan hover:shadow-[0_10px_24px_-10px_rgba(60,60,60,0.6),0_0_14px_-4px_rgba(176,141,87,0.85)]"
           >
             <Shine width="w-1/5" tint="via-brass/40" />
             <span className="relative font-mono text-[0.7rem] uppercase tracking-micro text-white">

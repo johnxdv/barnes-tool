@@ -30,7 +30,7 @@ export function EstimationResultConfirmation({ contact, onClose }) {
     >
       <GoldFrame className="-inset-[2px] rounded-[1.05rem]" spin="animate-border-spin-slow" />
 
-      <div className="relative flex h-[26rem] flex-col items-center justify-center overflow-hidden rounded-2xl border border-ink/10 bg-white px-6 py-8 text-center shadow-[0_22px_54px_-18px_rgba(16,20,28,0.3)] sm:h-[32rem] sm:px-10 lg:h-[36rem]">
+      <div className="relative flex h-[26rem] flex-col items-center justify-center overflow-hidden rounded-2xl border border-ink/10 bg-white px-6 py-8 text-center shadow-[0_22px_54px_-18px_rgba(60,60,60,0.3)] sm:h-[32rem] sm:px-10 lg:h-[36rem]">
         <button
           type="button"
           onClick={onClose}

@@ -107,7 +107,7 @@ export function EstimationResultStep({ address, price, onBack, onDone, onProgres
         <div className="relative mt-8">
           <GoldFrame className="-inset-[2px] rounded-[1.05rem]" spin="animate-border-spin-slow" />
 
-          <div className="relative overflow-hidden rounded-2xl border border-ink/10 bg-white px-6 py-8 text-center shadow-[0_22px_54px_-18px_rgba(16,20,28,0.3)] sm:px-8">
+          <div className="relative overflow-hidden rounded-2xl border border-ink/10 bg-white px-6 py-8 text-center shadow-[0_22px_54px_-18px_rgba(60,60,60,0.3)] sm:px-8">
             <p className="font-mono text-[0.6rem] uppercase tracking-micro text-ink/40">
               Estimation de votre bien
             </p>
@@ -138,7 +138,7 @@ export function EstimationResultStep({ address, price, onBack, onDone, onProgres
               <button
                 type="button"
                 onClick={() => setStarted(true)}
-                className="group relative flex w-full touch-manipulation items-center justify-center overflow-hidden rounded-xl bg-ink px-6 py-4 shadow-[0_8px_20px_-10px_rgba(16,20,28,0.55),0_0_10px_-5px_rgba(176,141,87,0.7)] transition-shadow duration-300 ease-plan hover:shadow-[0_10px_24px_-10px_rgba(16,20,28,0.6),0_0_14px_-4px_rgba(176,141,87,0.85)]"
+                className="group relative flex w-full touch-manipulation items-center justify-center overflow-hidden rounded-xl bg-ink px-6 py-4 shadow-[0_8px_20px_-10px_rgba(60,60,60,0.55),0_0_10px_-5px_rgba(176,141,87,0.7)] transition-shadow duration-300 ease-plan hover:shadow-[0_10px_24px_-10px_rgba(60,60,60,0.6),0_0_14px_-4px_rgba(176,141,87,0.85)]"
               >
                 <Shine width="w-1/5" tint="via-brass/40" />
                 <span className="relative font-mono text-[0.72rem] uppercase tracking-micro text-white">
@@ -176,7 +176,7 @@ export function EstimationResultStep({ address, price, onBack, onDone, onProgres
           <div className="relative">
             <GoldFrame className="-inset-[2px] rounded-[1.05rem]" spin="animate-border-spin-slow" />
 
-            <div className="relative overflow-hidden rounded-2xl border border-ink/10 bg-white px-6 py-7 text-center shadow-[0_22px_54px_-18px_rgba(16,20,28,0.3)] sm:px-8">
+            <div className="relative overflow-hidden rounded-2xl border border-ink/10 bg-white px-6 py-7 text-center shadow-[0_22px_54px_-18px_rgba(60,60,60,0.3)] sm:px-8">
               <p className="mx-auto flex max-w-xs items-center justify-center gap-2 text-[0.78rem] leading-snug text-ink/50">
                 <MapPin className="h-3.5 w-3.5 shrink-0 text-brass" strokeWidth={1.75} aria-hidden="true" />
                 {address.label}
@@ -213,7 +213,7 @@ export function EstimationResultStep({ address, price, onBack, onDone, onProgres
               transition={{ duration: reduce ? 0.2 : 0.5, ease: EASE }}
               className="mt-4"
             >
-              <div className="rounded-2xl border border-ink/10 bg-white px-4 py-5 shadow-[0_14px_36px_-20px_rgba(16,20,28,0.28)] sm:px-6">
+              <div className="rounded-2xl border border-ink/10 bg-white px-4 py-5 shadow-[0_14px_36px_-20px_rgba(60,60,60,0.28)] sm:px-6">
                 {/* Les deux bornes restent côte à côte jusqu'aux plus petits
                     écrans : les montants passent à une taille légèrement
                     réduite en dessous de 640 px plutôt que de s'empiler. */}

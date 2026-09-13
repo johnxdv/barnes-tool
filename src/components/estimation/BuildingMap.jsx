@@ -23,26 +23,26 @@ const MAX_ZOOM = 20
 // Teintes du liseré doré de la charte : Brass au repos, or clair pour la mise
 // en avant. Aucune couleur hors palette.
 const RESTING_STYLE = {
-  color: '#F5E3BC',
+  color: '#F0B1C1',
   weight: 1,
   opacity: 0.5,
-  fillColor: '#B08D57',
+  fillColor: '#B4002F',
   fillOpacity: 0.08,
 }
 
 const HOVER_STYLE = {
-  color: '#F5E3BC',
+  color: '#F0B1C1',
   weight: 2,
   opacity: 0.95,
-  fillColor: '#E8C88A',
+  fillColor: '#D25878',
   fillOpacity: 0.32,
 }
 
 const ACTIVE_STYLE = {
-  color: '#F5E3BC',
+  color: '#F0B1C1',
   weight: 3,
   opacity: 1,
-  fillColor: '#F5E3BC',
+  fillColor: '#F0B1C1',
   fillOpacity: 0.48,
 }
 
@@ -136,9 +136,9 @@ export function BuildingMap({ lat, lon, addressLabel, selection, onSelect }) {
     // Repère de l'adresse géocodée — non interactif : il oriente sans capter le clic.
     L.circleMarker([lat, lon], {
       radius: 5,
-      color: '#10141C',
+      color: '#3C3C3C',
       weight: 2,
-      fillColor: '#B08D57',
+      fillColor: '#B4002F',
       fillOpacity: 1,
       interactive: false,
     }).addTo(map)
@@ -347,9 +347,9 @@ export function BuildingMap({ lat, lon, addressLabel, selection, onSelect }) {
 
     fallbackMarkerRef.current = L.circleMarker([selection.lat, selection.lon], {
       radius: 9,
-      color: '#F5E3BC',
+      color: '#F0B1C1',
       weight: 3,
-      fillColor: '#B08D57',
+      fillColor: '#B4002F',
       fillOpacity: 0.65,
       interactive: false,
     }).addTo(map)
@@ -362,7 +362,7 @@ export function BuildingMap({ lat, lon, addressLabel, selection, onSelect }) {
   const showArmedHint = armedId !== null && selection === null
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-ink/10 bg-ink shadow-[0_22px_54px_-18px_rgba(16,20,28,0.45)]">
+    <div className="relative overflow-hidden rounded-2xl border border-ink/10 bg-ink shadow-[0_22px_54px_-18px_rgba(60,60,60,0.45)]">
       {/* `relative z-0` isole la pile d'empilement de Leaflet : ses panneaux
           internes (jusqu'à z-index 1000 pour les contrôles) restent ainsi sous
           les calques posés au-dessus de la carte, voile de confirmation compris. */}

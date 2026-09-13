@@ -4,7 +4,9 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
+    /* Le parcours vit désormais sur le fond clair du site (#F5F5F5), pas sur
+       l'Ink Navy de la maquette d'origine. */
+    color-scheme: light;
   }
 
   html {
@@ -12,12 +14,25 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  /* Le geste caractéristique de barnes-provence-littoral.com : un interlettrage
+     de 0.025em posé sur le `body` et hérité partout — corps de texte, titres
+     Prata compris. C'est ce très léger desserrage, et non une graisse ou une
+     couleur, qui fait l'allure de la marque ; il est donc déclaré une fois, au
+     plus haut, plutôt que répété par élément.
+
+     La graisse 300 vient de la même relève : le site compose son corps de texte
+     en Roboto Light. */
   body {
-    @apply bg-ink text-stone font-sans antialiased;
+    @apply bg-papier font-sans text-encre antialiased;
+    font-weight: 300;
+    letter-spacing: 0.025em;
     font-feature-settings: 'kern' 1, 'liga' 1;
   }
 
-  /* Chiffres tabulaires par défaut sur les données techniques (mono). */
+  /* Chiffres tabulaires sur les données chiffrées. La classe s'appelle encore
+     `font-mono` mais ne rend plus de monospace (voir `fontFamily` dans
+     `tailwind.config.js`) : ce réglage est ce qui, désormais, aligne les
+     colonnes de chiffres. */
   .font-mono {
     font-variant-numeric: tabular-nums;
   }
@@ -40,6 +55,23 @@
   h3 {
     @apply font-display;
     text-wrap: balance;
+  }
+
+  /* Prata ne se décline qu'en une graisse. Sans ce verrou, les dizaines de
+     `font-display font-semibold` hérités de la maquette d'origine — écrits pour
+     une Fraunces variable — feraient fabriquer au navigateur un faux gras :
+     des lettres épaissies mécaniquement, empattements compris, exactement ce
+     qu'une romane de ce dessin ne supporte pas. `font-synthesis-weight` le
+     refuse là où il est reconnu, la graisse forcée s'en charge ailleurs.
+
+     Posée hors de `@layer`, donc gagnante sur les utilitaires Tailwind sans
+     avoir à reprendre chaque appel. */
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-weight: 400;
+    font-synthesis-weight: none;
   }
 
   p {
@@ -96,13 +128,13 @@
       90deg,
       var(--accent-from) 0%,
       var(--accent) var(--fill),
-      rgba(16, 20, 28, 0.09) var(--fill)
+      rgba(60, 60, 60, 0.09) var(--fill)
     );
   }
 
   .spec-slider::-moz-range-track {
     @apply h-1.5 rounded-full;
-    background: rgba(16, 20, 28, 0.09);
+    background: rgba(60, 60, 60, 0.09);
   }
 
   .spec-slider::-moz-range-progress {
@@ -119,7 +151,7 @@
     -webkit-appearance: none;
     appearance: none;
     background: var(--accent);
-    box-shadow: 0 2px 8px -1px rgba(16, 20, 28, 0.45);
+    box-shadow: 0 2px 8px -1px rgba(60, 60, 60, 0.45);
     /* Recentre la pastille sur la piste : (1,375 rem − 0,375 rem) ÷ 2. */
     margin-top: -0.5rem;
     transition:
@@ -130,7 +162,7 @@
   .spec-slider::-moz-range-thumb {
     @apply h-[1.375rem] w-[1.375rem] rounded-full border-2 border-white;
     background: var(--accent);
-    box-shadow: 0 2px 8px -1px rgba(16, 20, 28, 0.45);
+    box-shadow: 0 2px 8px -1px rgba(60, 60, 60, 0.45);
     box-sizing: border-box;
     transition:
       transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -157,14 +189,14 @@
      aucun parcours — rien ne laisse croire qu'une valeur a été choisie. */
   .spec-slider[data-empty='true']::-webkit-slider-thumb {
     background: #ffffff;
-    border-color: rgba(16, 20, 28, 0.3);
-    box-shadow: 0 1px 5px -1px rgba(16, 20, 28, 0.3);
+    border-color: rgba(60, 60, 60, 0.3);
+    box-shadow: 0 1px 5px -1px rgba(60, 60, 60, 0.3);
   }
 
   .spec-slider[data-empty='true']::-moz-range-thumb {
     background: #ffffff;
-    border-color: rgba(16, 20, 28, 0.3);
-    box-shadow: 0 1px 5px -1px rgba(16, 20, 28, 0.3);
+    border-color: rgba(60, 60, 60, 0.3);
+    box-shadow: 0 1px 5px -1px rgba(60, 60, 60, 0.3);
   }
 
   .spec-slider:focus-visible {
@@ -227,15 +259,15 @@
   }
 
   .rapport-modifiable:hover {
-    background: rgba(18, 41, 74, 0.055);
-    box-shadow: inset 0 -1px 0 0 rgba(210, 75, 62, 0.35);
+    background: rgba(60, 60, 60, 0.055);
+    box-shadow: inset 0 -1px 0 0 rgba(180, 0, 47, 0.35);
   }
 
   .rapport-modifiable:focus,
   .rapport-modifiable:focus-visible {
     outline: 2px solid theme('colors.corail');
     outline-offset: 1px;
-    background: rgba(210, 75, 62, 0.05);
+    background: rgba(180, 0, 47, 0.05);
   }
 
   /* Champ sans valeur : le texte de remplacement se distingue d'une donnée
@@ -276,9 +308,14 @@
 
   html,
   body {
-    /* Le parcours vit sur fond sombre ; le rapport s'imprime sur blanc, sans
-       quoi chaque page consommerait une cartouche entière. */
-    background: #ffffff !important;
+    /* Le fond du site (#F5F5F5, le `--grey-50` de
+       barnes-provence-littoral.com), et non du blanc : une page de rapport doit
+       sortir de l'imprimante avec le même gris que celui sur lequel on vient de
+       la relire à l'écran. C'est la contrepartie du `print-color-adjust: exact`
+       posé plus bas — sans lui, le navigateur supprimerait ce fond pour
+       économiser l'encre et rendrait au document le blanc dont on cherche
+       justement à le sortir. */
+    background: theme('colors.papier') !important;
     margin: 0;
     padding: 0;
   }
@@ -368,7 +405,7 @@
   /* Un champ resté vide s'imprime en clair plutôt qu'en italique pâle, sinon
        la mention disparaît à l'impression. */
   .rapport-modifiable-vide {
-    color: rgba(18, 41, 74, 0.45) !important;
+    color: rgba(60, 60, 60, 0.45) !important;
   }
 
   /* Un tableau ou une figure ne doit pas se couper entre deux feuilles. */
@@ -407,12 +444,98 @@
     inset: 0;
     background: linear-gradient(
       180deg,
-      rgba(16, 20, 28, 0.15) 0%,
-      rgba(16, 20, 28, 0.35) 45%,
-      rgba(16, 20, 28, 0.85) 100%
+      rgba(60, 60, 60, 0.15) 0%,
+      rgba(60, 60, 60, 0.35) 45%,
+      rgba(60, 60, 60, 0.85) 100%
     );
     pointer-events: none;
   }
+}
+
+/* --- Tracé à l'encre ------------------------------------------------------
+
+   Primitive du dessin animé de l'écran d'analyse (voir `SceneEncre`), et de la
+   coche de certification du formulaire.
+
+   Le principe est celui du pinceau : un trait n'apparaît pas, il se trace. On
+   masque le contour par un tiret aussi long que lui (`stroke-dasharray`), on le
+   décale hors de vue (`stroke-dashoffset`), puis on ramène ce décalage à zéro —
+   le trait sort de son point de départ et court jusqu'au bout, exactement comme
+   une pointe qui avance sur le papier.
+
+   L'astuce qui rend la chose tenable sur une scène entière : `pathLength="1"`,
+   posé sur chaque `<path>`. L'attribut renormalise la longueur du tracé, quelle
+   que soit sa géométrie réelle — une façade de vingt unités et un bassin de
+   trois cents se pilotent dès lors avec les mêmes `1`. Sans lui, il faudrait
+   mesurer chaque chemin en JavaScript (`getTotalLength`) et réécrire la valeur
+   à chaque retouche du dessin.
+
+   Deux variables par trait, posées en style inline : `--duree` et `--retard`.
+   C'est la chorégraphie entière de la séquence — l'immeuble puis sa couronne,
+   la maison puis son bassin — et elle tient dans les délais.
+
+   Hors de tout `@layer` : ces règles ne sont pas des utilitaires Tailwind, et
+   les `@keyframes` n'ont pas à dépendre de l'élagage des classes. */
+@keyframes trace-encre {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.trace-encre {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  /* `forwards` : le trait reste tracé une fois posé. Sans lui, la scène
+     s'effacerait derrière le pinceau. */
+  animation: trace-encre var(--duree, 1.2s) cubic-bezier(0.65, 0, 0.35, 1) var(--retard, 0s)
+    forwards;
+}
+
+/* Ce qui ne se trace pas mais se pose — le monogramme au sommet de la tour,
+   l'écusson au fond du bassin. Une encre qui prend, plutôt qu'un fondu : le
+   léger agrandissement final est ce qui distingue les deux. */
+@keyframes pose-encre {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pose-encre {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pose-encre var(--duree, 0.7s) cubic-bezier(0.34, 1.4, 0.64, 1) var(--retard, 0s)
+    forwards;
+}
+
+/* Ondulation très lente de la surface du bassin, une fois celui-ci tracé : deux
+   traits d'eau qui s'étirent et se rétractent. C'est le seul élément de la
+   scène qui boucle — tout le reste se dessine une fois et reste posé. */
+@keyframes onde-bassin {
+  0%,
+  100% {
+    transform: scaleX(0.88);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleX(1.06);
+    opacity: 0.9;
+  }
+}
+
+.onde-bassin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: onde-bassin 3.4s cubic-bezier(0.4, 0, 0.6, 1) var(--retard, 0s) infinite;
 }
 
 /* Carte Leaflet — hors de tout `@layer`, à dessein.
@@ -473,5 +596,21 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+
+  /* La règle ci-dessus ramène les durées à zéro mais laisse courir les délais —
+     et toute la mise en scène du dessin à l'encre tient dans ses délais (voir
+     `SceneEncre`). Sans cette exception, un visiteur qui refuse le mouvement
+     verrait quand même la scène se composer sur six secondes, par à-coups
+     instantanés : le pire des deux mondes. Les retards sont donc annulés eux
+     aussi, et le dessin s'affiche d'emblée achevé — ce qui est exactement ce
+     qu'on attend d'une animation dont on ne veut pas.
+
+     Même chose pour le tampon de certification du formulaire, qui repose sur
+     les mêmes classes. */
+  .trace-encre,
+  .pose-encre,
+  .onde-bassin {
+    animation-delay: 0s !important;
   }
 }

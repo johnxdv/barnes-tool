@@ -238,7 +238,7 @@ export function EstimationChatPanel({ onDone, onProgress }) {
     <div className="relative w-full">
       <GoldFrame className="-inset-[2px] rounded-[1.05rem]" spin="animate-border-spin-slow" />
 
-      <div className="relative flex h-[26rem] flex-col overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-[0_22px_54px_-18px_rgba(16,20,28,0.3)] sm:h-[32rem] lg:h-[36rem]">
+      <div className="relative flex h-[26rem] flex-col overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-[0_22px_54px_-18px_rgba(60,60,60,0.3)] sm:h-[32rem] lg:h-[36rem]">
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-6 sm:px-8">
           <div className="flex flex-col gap-4">
             <AnimatePresence initial={false}>
