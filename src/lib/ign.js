@@ -97,6 +97,112 @@ export function orthoImageUrl(lat, lon, { width = 1000, height = 700, spanM = 32
   return `${WMS_ENDPOINT}?${params}`
 }
 
+/**
+ * Cadre figé du Plan IGN, et de quoi y poser des points.
+ *
+ * ── Pourquoi une image, alors qu'il y a déjà une carte ────────────────────
+ *
+ * La carte des commodités du rapport est une carte Leaflet, et elle s'affiche
+ * parfaitement — à l'écran. À l'impression, elle disparaissait.
+ *
+ * La cause est une chaîne, et chaque maillon est correct pris seul : la feuille
+ * d'impression ramène le cadre de la carte de 265 px à 70 mm (`.rapport-carte`),
+ * Leaflet observe ce redimensionnement et recadre, recadrer change le niveau de
+ * zoom, et un nouveau niveau de zoom veut de nouvelles dalles — que le
+ * navigateur demande au réseau au moment précis où il compose l'aperçu, sans
+ * les attendre. Il imprime donc le cadre vide. Rien de tout cela n'est un bogue
+ * de Leaflet : une carte glissante est faite pour charger à la demande, et
+ * l'impression ne demande rien.
+ *
+ * D'où cette fonction : le **même** cadrage, rendu d'un bloc par le WMS de la
+ * Géoplateforme, en une image ordinaire. Elle est chargée avec la page, bien
+ * avant qu'on imprime, et s'imprime comme n'importe quelle photographie. La
+ * carte Leaflet reste à l'écran, où elle est nette et vivante ; l'image prend sa
+ * place sur la feuille (voir `CarteCommodites`).
+ *
+ * ── Web Mercator, et pas EPSG:4326 ────────────────────────────────────────
+ *
+ * L'emprise est demandée en EPSG:3857. En 4326, le service rendrait une
+ * projection plate-carrée — des latitudes et des longitudes portées telles
+ * quelles sur deux axes —, qui aplatit l'image d'un facteur `cos(latitude)` :
+ * un quart en Provence. Les rues n'y seraient plus perpendiculaires, et surtout
+ * les pastilles posées dessus ne tomberaient pas sur leur bâtiment. En 3857, la
+ * projection est celle de Leaflet, et poser un point revient à une règle de
+ * trois.
+ *
+ * `position(lat, lon)` rend justement cette règle de trois : la place du point
+ * dans l'image, en pourcentages de largeur et de hauteur, prête pour un
+ * positionnement CSS.
+ *
+ * Le cadrage reprend celui de la carte : le disque relevé, plus une marge, la
+ * hauteur commandant l'échelle — c'est ce qui fait que deux rapports de même
+ * rayon s'impriment à la même échelle.
+ */
+export function cadrePlan({ lat, lon, rayonM, largeurPx, hauteurPx, margePx = 12 }) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+
+  const rayon = Number.isFinite(rayonM) && rayonM > 0 ? rayonM : 500
+
+  // Mètres de terrain par pixel : le disque doit tenir dans la hauteur, marges
+  // déduites. C'est la contrainte de la carte à l'écran, reprise à l'identique.
+  const utile = Math.max(hauteurPx - 2 * margePx, 1)
+  const metresParPixel = (2 * rayon) / utile
+
+  // Le mètre Mercator vaut moins que le mètre de terrain dès qu'on quitte
+  // l'équateur : l'échelle y est dilatée de `1 / cos(latitude)`. Oublier cette
+  // correction rendrait une image trop large d'un quart sous nos latitudes.
+  const dilatation = 1 / Math.max(Math.cos((lat * Math.PI) / 180), 0.01)
+  const demiLargeur = (largeurPx / 2) * metresParPixel * dilatation
+  const demiHauteur = (hauteurPx / 2) * metresParPixel * dilatation
+
+  const [x0, y0] = versMercator(lat, lon)
+  const bbox = [x0 - demiLargeur, y0 - demiHauteur, x0 + demiLargeur, y0 + demiHauteur]
+
+  const params = new URLSearchParams({
+    SERVICE: 'WMS',
+    VERSION: '1.3.0',
+    REQUEST: 'GetMap',
+    LAYERS: 'GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2',
+    STYLES: '',
+    FORMAT: 'image/png',
+    // EPSG:3857 est un système projeté : l'emprise s'y écrit x puis y, à
+    // l'inverse de l'ordre latitude/longitude qu'impose EPSG:4326 en WMS 1.3.0.
+    CRS: 'EPSG:3857',
+    BBOX: bbox.join(','),
+    // Trois fois la taille d'affichage : la feuille sort à 300 points par pouce
+    // là où l'écran en montre 96, et une image rendue à la taille du cadre
+    // s'imprimerait floue.
+    WIDTH: String(Math.round(largeurPx * 3)),
+    HEIGHT: String(Math.round(hauteurPx * 3)),
+  })
+
+  return {
+    url: `${WMS_ENDPOINT}?${params}`,
+    position(latPoint, lonPoint) {
+      if (!Number.isFinite(latPoint) || !Number.isFinite(lonPoint)) return null
+      const [x, y] = versMercator(latPoint, lonPoint)
+      return {
+        gauche: ((x - bbox[0]) / (bbox[2] - bbox[0])) * 100,
+        // L'axe des ordonnées Mercator monte vers le nord, celui de l'image
+        // descend : le rapport s'inverse.
+        haut: ((bbox[3] - y) / (bbox[3] - bbox[1])) * 100,
+      }
+    },
+  }
+}
+
+/** Coordonnées Web Mercator (EPSG:3857) d'un point, en mètres. */
+function versMercator(lat, lon) {
+  const phi = (lat * Math.PI) / 180
+  return [
+    (lon * Math.PI * EARTH_RADIUS_M) / 180,
+    EARTH_RADIUS_M * Math.log(Math.tan(Math.PI / 4 + phi / 2)),
+  ]
+}
+
+/** Rayon équatorial, celui sur lequel Web Mercator est défini. */
+const EARTH_RADIUS_M = 6378137
+
 /** Mention d'attribution imposée par la licence ouverte. */
 export const IGN_ATTRIBUTION = '© IGN — Géoplateforme'
 

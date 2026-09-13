@@ -228,6 +228,128 @@ export function PageLocalisation({ localisation, numero }) {
 // --- 3. Description du bien ------------------------------------------------
 
 /**
+ * Densités du bloc « points forts / points de réserve ».
+ *
+ * ── Le problème ───────────────────────────────────────────────────────────
+ *
+ * Ces deux listes sont les seules du rapport dont la longueur ne soit bornée
+ * par rien. Le moteur en suggère jusqu'à dix d'un côté et cinq de l'autre (voir
+ * `api/_lib/points.js`), l'agent en ajoute autant qu'il veut, et chaque ligne
+ * dans sa forme ample coûte douze millimètres de feuille. Douze points forts
+ * faisaient donc cent quarante millimètres là où la page en a une centaine à
+ * donner : le bloc débordait sous le bord de la feuille, et ce qui dépassait ne
+ * s'imprimait nulle part.
+ *
+ * ── Ce qui le résout ──────────────────────────────────────────────────────
+ *
+ * Trois formes, et ce n'est pas le goût qui choisit mais la place disponible
+ * (voir `BUDGET_MM`) :
+ *
+ *  - **Ample** — la forme d'origine, une carte par point, commentaire complet
+ *    sur deux ou trois lignes. Elle tient jusqu'à deux points.
+ *  - **Moyenne** — la carte perd son fond, les corps descendent d'un point, et
+ *    surtout le commentaire est **coupé à une ligne** : c'est son repli, et lui
+ *    seul, qui coûtait les deux tiers de la hauteur. Jusqu'à cinq points.
+ *  - **Compacte** — intitulé et commentaire sur la **même** ligne, le
+ *    commentaire tronqué proprement par la mise en page. Dix points tiennent
+ *    alors dans la hauteur que deux occupaient.
+ *
+ * Le commentaire tronqué reste entier dans le champ : c'est son affichage qui
+ * est borné, jamais son contenu, et l'agent qui l'ouvre pour le corriger voit
+ * ce qu'il a écrit.
+ */
+const DENSITES = [
+  {
+    nom: 'ample',
+    // Hauteur d'une ligne, en millimètres de feuille, commentaire compris.
+    // Ces trois valeurs ne sont pas des estimations : elles ont été relevées
+    // sur la page composée au format A4, dans une colonne de 85 mm — la
+    // largeur réelle du bloc. C'est important, parce que l'essentiel de la
+    // hauteur d'une ligne ample tient au *repli* du commentaire : « Un espace
+    // extérieur privatif, premier critère de recherche depuis 2020 » occupe
+    // trois lignes à cette largeur, pas une.
+    ligneMm: 22.5,
+    liste: 'space-y-2',
+    ligne: 'items-start gap-2.5 rounded-lg border px-3 py-2.5',
+    fond: true,
+    puce: 'mt-[0.45rem]',
+    titre: 'text-[0.9rem]',
+    detail: 'mt-0.5 text-[0.74rem] leading-snug',
+    enLigne: false,
+  },
+  {
+    nom: 'moyenne',
+    ligneMm: 9,
+    liste: 'space-y-[0.1rem]',
+    ligne: 'items-start gap-2 border-l-2 py-[0.15rem] pl-2.5',
+    fond: false,
+    puce: 'mt-[0.4rem]',
+    titre: 'text-[0.78rem] leading-[1.3]',
+    // Le commentaire tient sur une ligne, coupé net s'il est plus long. C'est
+    // ce qui sépare cette forme de l'ample : le repli du commentaire est ce qui
+    // coûte, pas le commentaire.
+    detail: 'truncate text-[0.64rem] leading-[1.3]',
+    enLigne: false,
+  },
+  {
+    nom: 'compacte',
+    ligneMm: 4.4,
+    liste: 'space-y-0',
+    ligne: 'items-baseline gap-2 border-l-2 py-0 pl-2.5',
+    fond: false,
+    puce: 'mt-[0.28rem]',
+    titre: 'text-[0.72rem] leading-[1.25]',
+    detail: 'text-[0.62rem] leading-[1.25]',
+    enLigne: true,
+  },
+]
+
+/**
+ * Ce que la feuille donne à la liste, en millimètres.
+ *
+ * Ce n'est pas un réglage d'esthétique : c'est un reste, et un reste étroit. La
+ * page de description porte 229 mm utiles entre son en-tête et son pied ; le
+ * tableau « Le logement / Le bâti » en prend 106, le bloc « Environnement » 51,
+ * la mention de source et les intervalles une vingtaine, le titre de section du
+ * bloc lui-même neuf. Restent quarante-cinq millimètres pour les lignes
+ * elles-mêmes, et c'est tout.
+ *
+ * Rapporté aux hauteurs ci-dessus, cela dit exactement ce que la page peut
+ * porter : **deux** points forts dans leur forme ample, **cinq** dans la
+ * moyenne, **dix** dans la compacte. C'est peu, et ce n'est pas un choix de
+ * mise en page — c'est ce qu'une feuille A4 contient une fois le reste servi.
+ * La forme d'origine, seule, tenait jusqu'à deux lignes ; à partir de la
+ * troisième elle débordait, ce qui est précisément le défaut corrigé ici.
+ *
+ * Le chiffre est à revoir dès qu'un bloc de cette page change de taille — et la
+ * façon de le vérifier est celle du projet : composer la page au format A4 dans
+ * le navigateur et lire sa hauteur, qui doit valoir 297 mm.
+ */
+const BUDGET_MM = 45
+
+/**
+ * La forme qui convient à la plus longue des deux colonnes : la plus ample de
+ * celles qui tiennent dans le budget, et la plus serrée à défaut.
+ *
+ * La décision est prise **une fois pour les deux colonnes**, sur la plus
+ * longue : deux listes côte à côte dans deux corps différents se liraient comme
+ * un défaut d'impression.
+ */
+const densitePour = (lignes) =>
+  DENSITES.find((densite) => lignes * densite.ligneMm <= BUDGET_MM) ?? DENSITES[DENSITES.length - 1]
+
+/**
+ * Au-delà, la colonne ne tient plus, même à la densité la plus serrée.
+ *
+ * Les lignes suivantes ne sont pas rognées en silence — c'est le défaut qu'on
+ * corrige, pas une façon de le corriger : elles restent à l'écran, barrées
+ * comme une ligne retirée à la main, et un avertissement dit exactement combien
+ * ne s'imprimeront pas. À l'agent de choisir lesquelles garder ; le rapport ne
+ * tranche pas à sa place, il l'avertit.
+ */
+const MAX_LIGNES_IMPRIMEES = Math.floor(BUDGET_MM / DENSITES[DENSITES.length - 1].ligneMm)
+
+/**
  * Liste de points forts ou de réserves : titre et commentaire modifiables,
  * ligne masquable, et de quoi en ajouter.
  *
@@ -236,46 +358,65 @@ export function PageLocalisation({ localisation, numero }) {
  * en suggestion et non en conclusion : chacune se corrige, se retire, et rien
  * n'interdit d'en écrire d'autres.
  */
-function ListePoints({ liste, cleListe, accent }) {
-  const { masques, basculerMasque, ajouts, ajouter } = useEdition()
-  const supplementaires = ajouts[cleListe] ?? 0
-
-  const lignes = [
-    ...liste.map((point) => ({ ...point, ajoutee: false })),
-    ...Array.from({ length: supplementaires }, (_, index) => ({
-      cle: `${cleListe}.ajout.${index}`,
-      titre: '',
-      detail: '',
-      ajoutee: true,
-    })),
-  ]
+function ListePoints({ lignes, cleListe, accent, densite }) {
+  const { masques, basculerMasque, ajouter } = useEdition()
+  // Rang de chaque ligne parmi celles qui partiront réellement à l'impression.
+  // Une ligne retirée à la main ne consomme pas de place sur la feuille, et ne
+  // doit donc pas pousser une autre au-delà du plafond.
+  let rangImprime = -1
+  const imprimees = lignes.filter((point) => masques[point.cle] !== true).length
+  const surplus = Math.max(imprimees - MAX_LIGNES_IMPRIMEES, 0)
+  // Les classes de couleur sont écrites en toutes lettres : Tailwind compose sa
+  // feuille en lisant les sources, et une classe fabriquée à l'exécution
+  // (`text-${'{'}teinte{'}'}`) n'y figurerait jamais.
+  const titreCouleur = accent === 'corail' ? 'text-corail' : 'text-marine'
 
   return (
     <div>
-      <ul className="space-y-2">
+      <ul className={densite.liste}>
         {lignes.map((point) => {
           const masque = masques[point.cle] === true
+          if (!masque) rangImprime += 1
+          // Une ligne au-delà de la capacité de la feuille : elle reste ici,
+          // signalée, et ne part pas à l'impression.
+          const horsFeuille = !masque && rangImprime >= MAX_LIGNES_IMPRIMEES
 
           return (
             <li
               key={point.cle}
-              className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${
-                accent === 'corail' ? 'border-corail/20 bg-corail/[0.04]' : 'border-marine/12 bg-marine/[0.025]'
-              } ${masque ? 'rapport-masque' : ''}`}
+              className={[
+                'flex',
+                densite.ligne,
+                accent === 'corail'
+                  ? `border-corail/20 ${densite.fond ? 'bg-corail/[0.04]' : ''}`
+                  : `border-marine/12 ${densite.fond ? 'bg-marine/[0.025]' : ''}`,
+                // Une ligne hors feuille porte la même marque qu'une ligne
+                // retirée à la main : barrée et pâlie à l'écran, absente du
+                // papier. C'est la seule façon de la signaler qui dise aussi ce
+                // qu'il va lui arriver.
+                masque || horsFeuille ? 'rapport-masque' : '',
+              ].join(' ')}
             >
               <span
                 aria-hidden="true"
-                className={`mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full ${
+                className={`${densite.puce} h-1.5 w-1.5 shrink-0 rounded-full ${
                   accent === 'corail' ? 'bg-corail' : 'bg-marine/60'
                 }`}
               />
-              <div className="min-w-0 flex-1">
+              {/* En forme compacte, intitulé et commentaire partagent la même
+                  ligne : c'est ce qui divise la hauteur du bloc par trois.
+                  `min-w-0` + `truncate` sur le commentaire évitent qu'un
+                  commentaire long ne repousse la ligne — il est coupé à
+                  l'affichage, jamais dans le champ. */}
+              <div
+                className={densite.enLigne ? 'flex min-w-0 flex-1 items-baseline gap-2' : 'min-w-0 flex-1'}
+              >
                 <ChampModifiable
                   cle={`${point.cle}.titre`}
                   valeur={point.titre}
                   as="p"
                   placeholder="Intitulé"
-                  className="block font-display text-[0.9rem] font-semibold text-marine"
+                  className={`${densite.enLigne ? 'shrink-0' : 'block'} font-display ${densite.titre} font-semibold ${titreCouleur}`}
                 />
                 <ChampModifiable
                   cle={`${point.cle}.detail`}
@@ -283,7 +424,7 @@ function ListePoints({ liste, cleListe, accent }) {
                   as="p"
                   multiligne
                   placeholder="Commentaire"
-                  className="mt-0.5 block text-[0.74rem] leading-snug text-marine/55"
+                  className={`${densite.enLigne ? 'min-w-0 flex-1 truncate' : 'block'} ${densite.detail} text-marine/55`}
                 />
               </div>
               <OutilLigne
@@ -303,6 +444,22 @@ function ListePoints({ liste, cleListe, accent }) {
         </p>
       ) : null}
 
+      {/* L'avertissement de débordement. Marqué `data-outil` : il s'adresse à
+          l'agent pendant la relecture, et n'a rien à faire sur le document
+          remis au vendeur. */}
+      {surplus > 0 ? (
+        <p
+          data-outil="true"
+          className="mt-1.5 rounded-md border border-corail/30 bg-corail/[0.06] px-2.5 py-1.5 text-[0.66rem] leading-snug text-corail"
+        >
+          {surplus > 1
+            ? `${surplus} lignes au-delà de ce que la feuille peut porter : elles ne seront pas imprimées.`
+            : 'Une ligne au-delà de ce que la feuille peut porter : elle ne sera pas imprimée.'}{' '}
+          Retirez-en {surplus > 1 ? 'd’autres' : 'une'} pour choisir {surplus > 1 ? 'lesquelles' : 'laquelle'}{' '}
+          garder.
+        </p>
+      ) : null}
+
       <button
         type="button"
         data-outil="true"
@@ -312,6 +469,52 @@ function ListePoints({ liste, cleListe, accent }) {
         <Plus className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
         Ajouter
       </button>
+    </div>
+  )
+}
+
+/**
+ * Les deux colonnes de points, et la densité qu'elles partagent.
+ *
+ * Le montage des lignes — suggestions du moteur, puis ajouts de l'agent — est
+ * fait ici plutôt que dans chaque colonne : c'est ce qui permet de compter les
+ * deux avant d'en choisir la forme (voir `DENSITES`).
+ */
+function Points({ forts, reserves }) {
+  const { ajouts, masques } = useEdition()
+
+  const monter = (liste, cleListe) => [
+    ...liste.map((point) => ({ ...point })),
+    ...Array.from({ length: ajouts[cleListe] ?? 0 }, (_, index) => ({
+      cle: `${cleListe}.ajout.${index}`,
+      titre: '',
+      detail: '',
+    })),
+  ]
+
+  const lignesForts = monter(forts, 'points.forts')
+  const lignesReserves = monter(reserves, 'points.reserves')
+
+  // Le compte qui décide de la forme est celui des lignes **imprimées** : une
+  // ligne que l'agent retire ne pèse plus sur la feuille, et rend sa place aux
+  // autres. Retirer trois points forts d'une liste de dix la fait donc repasser
+  // d'elle-même à une forme plus lisible, ce qui est le geste attendu.
+  const aImprimer = (liste) => liste.filter((point) => masques[point.cle] !== true).length
+  const densite = densitePour(Math.max(aImprimer(lignesForts), aImprimer(lignesReserves)))
+
+  return (
+    <div className="mt-5 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+      <Section titre="Points forts">
+        <ListePoints lignes={lignesForts} cleListe="points.forts" densite={densite} />
+      </Section>
+      <Section titre="Points de réserve">
+        <ListePoints
+          lignes={lignesReserves}
+          cleListe="points.reserves"
+          accent="corail"
+          densite={densite}
+        />
+      </Section>
     </div>
   )
 }
@@ -338,7 +541,7 @@ export function PageDescription({ description, numero }) {
           faut : c'est le seul de la page dont les valeurs ne viennent pas
           toutes de la même main — trois sont déclarées par l'agent, six sont
           relevées (voir `environnement` dans `rapportModele.js`). */}
-      <Section titre="Environnement du bien" className="mt-6">
+      <Section titre="Environnement du bien" className="mt-5">
         {/* Neuf vignettes plutôt que neuf lignes.
 
             Le couple libellé / valeur en vis-à-vis, employé partout ailleurs
@@ -353,7 +556,7 @@ export function PageDescription({ description, numero }) {
             vignette remplace le trait de séparation horizontal des listes : il
             faut bien quelque chose pour découper la grille, et une bordure
             complète en ferait un tableau. */}
-        <div className="grid grid-cols-2 gap-x-5 gap-y-2.5 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3">
           {description.environnement.lignes.map((ligne) => (
             <div key={ligne.id} className="border-l-2 border-barnes/25 pl-2.5">
               <p className="font-mono text-[0.5rem] uppercase leading-tight tracking-micro text-marine/40">
@@ -369,29 +572,40 @@ export function PageDescription({ description, numero }) {
           ))}
         </div>
 
-        {description.environnement.motifSonore ? (
-          <p className="mt-2 flex items-baseline gap-2 text-[0.68rem] leading-snug text-marine/45">
-            <span aria-hidden="true" className="mt-[0.3rem] h-1 w-1 shrink-0 rounded-full bg-barnes" />
-            <ChampModifiable
-              cle="env.sonore.motif"
-              valeur={description.environnement.motifSonore}
-              multiligne
-            />
-          </p>
+        {/* Les apartés — d'où sortent les valeurs relevées.
+
+            Ils étaient un, celui du niveau sonore ; ils sont quatre depuis que
+            la vue, l'exposition et la luminosité sont déduites plutôt que
+            déclarées. C'est la contrepartie exacte de cette déduction : une
+            qualification présumée qui n'énonce pas sur quoi elle se fonde est
+            une affirmation, et ce document est signé par l'agence.
+
+            Chacun tient en une phrase courte, rédigée pour cet emplacement
+            (voir `cadre.js`) : quatre motifs de trois lignes prendraient vingt
+            millimètres de feuille, que les points forts n'ont pas à payer. Deux
+            colonnes les ramènent à deux rangs. */}
+        {description.environnement.motifs.length > 0 ? (
+          <ul className="mt-2 grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
+            {description.environnement.motifs.map((motif) => (
+              <li
+                key={motif.cle}
+                className="flex items-baseline gap-2 text-[0.58rem] leading-[1.2] text-marine/45"
+              >
+                <span
+                  aria-hidden="true"
+                  className="mt-[0.28rem] h-1 w-1 shrink-0 rounded-full bg-barnes"
+                />
+                <ChampModifiable cle={motif.cle} valeur={motif.texte} multiligne />
+              </li>
+            ))}
+          </ul>
         ) : null}
       </Section>
 
-      <div className="mt-6 grid gap-x-8 gap-y-6 sm:grid-cols-2">
-        <Section titre="Points forts">
-          <ListePoints liste={description.forts} cleListe="points.forts" />
-        </Section>
-        <Section titre="Points de réserve">
-          <ListePoints liste={description.reserves} cleListe="points.reserves" accent="corail" />
-        </Section>
-      </div>
+      <Points forts={description.forts} reserves={description.reserves} />
 
       {description.environnement.source ? (
-        <p className="mt-auto pt-5 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
+        <p className="mt-auto pt-4 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
           Environnement relevé d’après {description.environnement.source}
         </p>
       ) : null}
@@ -514,10 +728,16 @@ export function PageCommodites({ commodites, numero }) {
         </Suspense>
       </div>
 
-      {/* Trois catégories serrées sous une carte de soixante-six millimètres :
+      {/* Trois catégories serrées sous une carte de soixante-dix millimètres :
           la feuille A4 n'a pas de marge de manœuvre ici, et chaque écart de
-          plus la ferait déborder sur une seconde page pour deux lignes. */}
-      <div className="mt-3 space-y-2">
+          plus la ferait déborder sur une seconde page pour deux lignes.
+
+          L'élargissement du relevé (voir `CATEGORIES` dans `src/lib/poi.js`) a
+          coûté le dernier millimètre : les décomptes passent de « 4 commerces »
+          à « 41 commerces », et la légende de la carte, qui les reprend,
+          approche de son second rang. D'où ces intervalles rabotés d'un
+          quart. */}
+      <div className="mt-2.5 space-y-1.5">
         {commodites.categories.map((categorie) => (
           <Section
             key={categorie.id}

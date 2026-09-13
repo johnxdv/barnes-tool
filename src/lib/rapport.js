@@ -3,7 +3,7 @@
 // et reçoit des blocs de chiffres déjà arrêtés — DVF, Insee, BCE. C'est ce qui
 // garantit que deux agents ouvrant le même rapport y lisent les mêmes nombres.
 //
-// Deux exceptions, et elles sont délibérées.
+// Trois exceptions, et elles sont délibérées.
 //
 // **Les commodités du quartier** (`./poi.js`), qu'Overpass plafonne par adresse
 // IP : les quelques IP de sortie de l'hébergeur étaient assez sollicitées pour
@@ -19,10 +19,17 @@
 // Géoplateforme, que le navigateur sollicite déjà pour le repérage du bâtiment,
 // et dont il a donc la connexion ouverte.
 //
-// Les trois parts partent ensemble et se rejoignent ici : le serveur ne
+// **Le cadre de vie** (`./cadre.js`) : exposition, vue, luminosité, déduites de
+// l'emprise du bâtiment, de celles de ses voisins et du relief. Trois champs que
+// l'agent saisissait à la main jusqu'ici. Même hôte, mêmes raisons — et une
+// troisième : il a besoin de l'emprise retenue au repérage, qui vit dans le
+// navigateur et n'a aucune raison de faire l'aller-retour jusqu'au serveur.
+//
+// Les quatre parts partent ensemble et se rejoignent ici : le serveur ne
 // travaille pas pendant que les autres répondent, et l'assemblage ne dure pas
 // plus longtemps qu'avant.
 
+import { fetchCadre } from './cadre.js'
 import { fetchEnvironnement } from './environnement.js'
 import { sansPhotos } from './photos.js'
 import { fetchPointsInteret } from './poi.js'
@@ -50,6 +57,7 @@ export const RAPPORT_VIDE = {
   zone: null,
   poi: null,
   environnement: null,
+  cadre: null,
   quartier: null,
   reperes: null,
   marche: null,
@@ -90,11 +98,11 @@ export async function requestRapport({ selection, address, price, characteristic
     characteristics: sansPhotos(characteristics ?? null),
   }
 
-  // Les trois parts en parallèle. Ni `fetchPointsInteret` ni
-  // `fetchEnvironnement` ne lèvent hors annulation — chacune rend un relevé
-  // pauvre plutôt qu'une erreur. Elles sont tout de même protégées : aucune ne
-  // doit emporter le reste du rapport.
-  const [blocs, poi, environnement] = await Promise.all([
+  // Les quatre parts en parallèle. Aucun des trois relevés du navigateur ne
+  // lève hors annulation — chacun rend un relevé pauvre plutôt qu'une erreur.
+  // Ils sont tout de même protégés : aucun ne doit emporter le reste du
+  // rapport.
+  const [blocs, poi, environnement, cadre] = await Promise.all([
     fetchBlocsServeur(payload),
     fetchPointsInteret(payload.lat, payload.lon).catch((error) => {
       console.error('[rapport] Relevé des commodités en échec —', error)
@@ -104,13 +112,21 @@ export async function requestRapport({ selection, address, price, characteristic
       console.error('[rapport] Relevé de l’environnement en échec —', error)
       return null
     }),
+    fetchCadre({
+      lat: payload.lat,
+      lon: payload.lon,
+      geometry: selection?.geometry ?? null,
+    }).catch((error) => {
+      console.error('[rapport] Relevé du cadre de vie en échec —', error)
+      return null
+    }),
   ])
 
   // Les relevés du navigateur passent après l'étalement des blocs serveur, et
   // donc devant : `api/rapport.js` ne renvoie plus de champ `poi`, mais un
   // rapport assemblé par une version antérieure de la fonction en porterait un,
   // et c'est celui d'ici qui doit gagner.
-  return { ...blocs, poi, environnement }
+  return { ...blocs, poi, environnement, cadre }
 }
 
 /** Les blocs assemblés par la fonction serverless. Ne rejette jamais. */

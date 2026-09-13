@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { IGN_ATTRIBUTION, PLAN_MAX_NATIVE_ZOOM, PLAN_TILE_URL } from '../../lib/ign'
+import { cadrePlan, IGN_ATTRIBUTION, PLAN_MAX_NATIVE_ZOOM, PLAN_TILE_URL } from '../../lib/ign'
 
 /**
  * Fond de secours — les dalles d'OpenStreetMap.
@@ -39,12 +39,33 @@ const OSM_ATTRIBUTION_FOND = '© OpenStreetMap'
  *    l'agence. C'est aussi ce qui la rend inoffensive au clic pendant la
  *    relecture du rapport.
  *
- * L'impression, justement, est le point délicat : Leaflet compose ses tuiles
- * pour la taille du conteneur à l'écran, et la feuille A4 est plus étroite
- * (~673 px contre ~744 px). Sans rien faire, la carte s'imprimerait rognée à
- * droite. `matchMedia('print')` prévient du basculement, et l'on recadre alors
- * — c'est le seul moment où la carte bouge. Les dalles, elles, sont déjà
- * chargées : le rapport a été lu avant d'être imprimé.
+ * ── L'impression ne passe pas par Leaflet ────────────────────────────────
+ *
+ * Elle y passait, et la carte sortait vide de l'imprimante.
+ *
+ * Le raisonnement tenait : la feuille est plus étroite que l'écran, on prévient
+ * du basculement par `matchMedia('print')`, on recadre, c'est réglé. Il manquait
+ * un maillon — recadrer change le niveau de zoom, un niveau de zoom demande
+ * d'autres dalles, et le navigateur les demande au réseau pendant qu'il compose
+ * l'aperçu, sans les attendre. Les dalles déjà chargées étaient celles du
+ * cadrage d'avant ; celles du cadrage d'après n'arrivaient jamais à temps. Le
+ * PDF portait un cadre gris au milieu de la page des commodités.
+ *
+ * Ce qui s'imprime est donc une **image**, rendue d'un bloc par le WMS de la
+ * Géoplateforme sur exactement le même cadrage (voir `cadrePlan` dans
+ * `ign.js`), avec les pastilles posées dessus en positionnement absolu. Elle est
+ * chargée avec la page, bien avant qu'on imprime, et ne dépend plus de rien au
+ * moment de l'aperçu.
+ *
+ * Les trois couches sont superposées en permanence, et c'est ce qui rend
+ * l'image fiable : elle est dans la page, mise en page, chargée — simplement
+ * recouverte à l'écran par les dalles opaques de Leaflet. Une image en
+ * `display: none` serait bien téléchargée par les navigateurs, mais rien ne
+ * l'oblige ; celle-ci n'a pas à être téléchargée, elle est déjà là.
+ *
+ * Si le WMS ne répond pas, on retombe sur l'ancien comportement plutôt que sur
+ * rien : Leaflet reprend la feuille, avec son défaut connu, et c'est toujours
+ * mieux qu'un cadre blanc.
  */
 
 /**
@@ -91,6 +112,8 @@ export const couleurCategorie = (id) => COULEURS[id] ?? COULEUR_PAR_DEFAUT
  */
 const HAUTEUR = 265
 const LARGEUR_MAX = '23rem'
+/** La même largeur, en pixels : l'image figée se demande en pixels, pas en rem. */
+const LARGEUR_PX = 368
 
 /**
  * Cadrage : le disque interrogé, plus une marge.
@@ -107,6 +130,11 @@ export function CarteCommodites({ carte, source }) {
   // Provenance du fond réellement affiché : l'attribution imprimée sous la
   // carte doit nommer celui qu'on voit, pas celui qu'on avait demandé.
   const [fond, setFond] = useState(IGN_ATTRIBUTION)
+  // L'image figée a-t-elle abouti ? Elle seule décide qui imprime : elle si
+  // elle est là, Leaflet sinon. Optimiste au départ — le cas courant est
+  // qu'elle charge, et un état pessimiste ferait clignoter la classe
+  // `print:hidden` le temps du chargement.
+  const [statique, setStatique] = useState(true)
 
   const { lat, lon, rayonM } = carte ?? {}
   // Les points sont reconstruits à chaque rendu du rapport (le modèle est pur,
@@ -208,6 +236,12 @@ export function CarteCommodites({ carte, source }) {
     }).addTo(map)
 
     const cadrer = () => {
+      // Cadre de taille nulle : c'est ce que voit l'observateur quand la couche
+      // glissante passe en `display: none` à l'impression. `fitBounds` sur une
+      // carte sans surface calcule un niveau de zoom infini et laisse la carte
+      // dans un état dont elle ne revient pas.
+      if (container.clientWidth === 0 || container.clientHeight === 0) return
+
       map.invalidateSize({ animate: false })
       map.fitBounds(disque.getBounds(), { padding: [MARGE_PX, MARGE_PX], animate: false })
     }
@@ -220,21 +254,14 @@ export function CarteCommodites({ carte, source }) {
     const observer = new ResizeObserver(cadrer)
     observer.observe(container)
 
-    // Bascule vers la feuille : la largeur utile passe de ~744 à ~673 px, et la
-    // carte s'imprimerait rognée sans ce recadrage. `matchMedia` prévient avant
-    // que le navigateur compose l'aperçu ; `beforeprint` double la mise pour
-    // les navigateurs qui ne relaient pas le premier.
-    const media = window.matchMedia('print')
-    const surImpression = () => cadrer()
-    media.addEventListener?.('change', surImpression)
-    window.addEventListener('beforeprint', surImpression)
-    window.addEventListener('afterprint', surImpression)
+    // Aucun écouteur d'impression : c'est l'image figée qui part sur la feuille,
+    // et Leaflet n'a plus à s'y adapter (voir le commentaire de tête). Les
+    // trois écouteurs qui tenaient ici — `matchMedia('print')`, `beforeprint`,
+    // `afterprint` — recadraient la carte au moment de l'aperçu, ce qui est
+    // précisément ce qui la vidait.
 
     return () => {
       observer.disconnect()
-      media.removeEventListener?.('change', surImpression)
-      window.removeEventListener('beforeprint', surImpression)
-      window.removeEventListener('afterprint', surImpression)
       map.remove()
     }
     // `signature` tient lieu de `carte.points` dans les dépendances : la liste
@@ -246,15 +273,87 @@ export function CarteCommodites({ carte, source }) {
   // produit une valide — le bien, son disque de recherche, et les rues autour.
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
 
+  // Le cadrage de l'image figée, calculé sur les mêmes valeurs que celui de
+  // Leaflet — même disque, même marge, même rapport de forme. C'est ce qui fait
+  // que l'écran et la feuille montrent la même carte et non deux vues voisines.
+  const plan = cadrePlan({
+    lat,
+    lon,
+    rayonM,
+    largeurPx: LARGEUR_PX,
+    hauteurPx: HAUTEUR,
+    margePx: MARGE_PX,
+  })
+
   return (
     <figure className="m-0">
       <div
-        ref={containerRef}
         role="img"
         aria-label="Carte des commodités relevées autour du bien, par catégorie"
         style={{ height: `${HAUTEUR}px`, maxWidth: LARGEUR_MAX }}
-        className="rapport-carte mx-auto w-full overflow-hidden rounded-lg border border-marine/12 bg-marine/[0.03]"
-      />
+        className="rapport-carte relative mx-auto w-full overflow-hidden rounded-lg border border-marine/12 bg-marine/[0.03]"
+      >
+        {/* Couche 1 — le plan figé. Recouvert à l'écran, seul sur la feuille.
+
+            `object-cover` : le cadre garde ses proportions à l'impression (70 mm
+            de haut pour une largeur plafonnée à 23 rem), mais pas au pixel près
+            selon la largeur de colonne disponible ; un recadrage centré vaut
+            mieux qu'une image étirée, et ce que la marge perd est du fond de
+            plan, jamais une pastille — elles vivent toutes dans le disque. */}
+        {plan ? (
+          <img
+            src={plan.url}
+            alt=""
+            aria-hidden="true"
+            onError={() => setStatique(false)}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : null}
+
+        {/* Couche 2 — les pastilles de l'image figée, en pourcentages de cadre.
+            Elles doublent celles de Leaflet, et c'est voulu : à l'écran elles
+            sont dessous, invisibles ; sur la feuille elles sont tout ce qui
+            reste. */}
+        {plan ? (
+          <div aria-hidden="true" className="absolute inset-0">
+            {(carte?.points ?? []).map((point, index) => {
+              const place = plan.position(point.lat, point.lon)
+              if (!place) return null
+              return (
+                <span
+                  key={`${point.categorie}-${index}`}
+                  style={{
+                    left: `${place.gauche}%`,
+                    top: `${place.haut}%`,
+                    backgroundColor: couleurCategorie(point.categorie),
+                  }}
+                  className="absolute h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full ring-[1.5px] ring-white/90"
+                />
+              )
+            })}
+
+            {/* Le bien, losange rouge cerné d'encre — même signalétique que sur
+                la carte glissante. */}
+            {plan.position(lat, lon) ? (
+              <span
+                style={{
+                  left: `${plan.position(lat, lon).gauche}%`,
+                  top: `${plan.position(lat, lon).haut}%`,
+                }}
+                className="absolute h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rotate-45 border-2 border-[#3C3C3C] bg-barnes shadow-[0_0_0_2px_rgba(255,255,255,0.9)]"
+              />
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Couche 3 — la carte glissante. Elle couvre les deux autres à l'écran
+            et se retire de la feuille, sauf si l'image figée a échoué : mieux
+            vaut alors son ancien défaut qu'un cadre blanc. */}
+        <div
+          ref={containerRef}
+          className={`absolute inset-0 ${plan && statique ? 'print:hidden' : ''}`}
+        />
+      </div>
 
       {/* Légende et provenances sur la même ligne, sous la carte.
           Les attributions avaient leur paragraphe en pied de page ; sur une
@@ -265,7 +364,14 @@ export function CarteCommodites({ carte, source }) {
       <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-1">
         <Legende carte={carte} />
         <span className="font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
-          {source ? `Relevé ${source} · ` : ''}Fond de plan {fond}
+          {source ? `Relevé ${source} · ` : ''}Fond de plan{' '}
+          {/* Les deux fonds diffèrent dans un seul cas : les dalles IGN sont
+              tombées à l'écran (repli OpenStreetMap) mais le WMS, lui, a rendu
+              son image. La feuille porte alors le plan IGN et l'écran non — et
+              une attribution qui n'en nommerait qu'un serait fausse sur l'autre. */}
+          {plan && statique && fond !== IGN_ATTRIBUTION
+            ? `${fond} à l’écran, ${IGN_ATTRIBUTION} à l’impression`
+            : fond}
         </span>
       </figcaption>
     </figure>

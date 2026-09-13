@@ -246,6 +246,15 @@ export function BuildingMap({ lat, lon, addressLabel, selection, onSelect }) {
         lat: point.lat,
         lon: point.lng,
         areaM2: footprintAreaM2(feature.geometry),
+        // L'emprise elle-même, et pas seulement sa surface : le relevé du cadre
+        // de vie (voir `src/lib/cadre.js`) en tire l'orientation des façades,
+        // d'où l'exposition présumée du bien. Elle est déjà en main ici ; la
+        // laisser de côté obligerait à la redemander au WFS au moment du
+        // rapport, pour un bâtiment qu'on vient de désigner du doigt.
+        //
+        // Elle ne part sur aucune requête : `requestEstimation` comme
+        // `requestRapport` composent leur charge utile champ par champ.
+        geometry: feature.geometry ?? null,
       })
     }
 

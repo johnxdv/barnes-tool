@@ -52,21 +52,6 @@ const ETAT_LABELS = {
   neuf: 'Neuf',
 }
 
-const VUE_LABELS = {
-  'vis-a-vis': 'Vis-à-vis',
-  degagee: 'Dégagée',
-  panoramique: 'Panoramique',
-}
-
-const EXPOSITION_LABELS = { nord: 'Nord', est: 'Est', sud: 'Sud', ouest: 'Ouest' }
-
-const LUMINOSITE_LABELS = {
-  sombre: 'Sombre',
-  correcte: 'Correcte',
-  lumineuse: 'Lumineuse',
-  traversante: 'Traversante',
-}
-
 /** Étage écrit comme on le dit — le zéro d'un appartement est un rez-de-chaussée. */
 function etageLabel(value) {
   if (value == null) return null
@@ -235,35 +220,44 @@ function commodites(poi, { lat, lon }) {
 /**
  * Environnement du bien — ce qui l'entoure, plutôt que ce qu'il est.
  *
- * Le bloc mêle délibérément deux provenances, et c'est ce qui en fait l'intérêt.
- * La vue, l'exposition et la luminosité viennent de l'agent, qui a visité ;
- * le niveau sonore, le littoral et les espaces boisés viennent des référentiels
- * IGN, qui mesurent des distances mieux qu'un souvenir de visite ; les trois
- * accès viennent du relevé de commodités, dont ils ne sont qu'une lecture — la
- * page précédente dit « école à 210 m », celle-ci dit ce que cela vaut.
+ * **Les neuf lignes sont désormais relevées, plus une seule n'est saisie.** La
+ * vue, l'exposition et la luminosité étaient les trois dernières à venir du
+ * formulaire ; elles viennent maintenant de `cadre.js`, qui les déduit de
+ * l'emprise du bâtiment, de celles de ses voisins et du relief. Le niveau
+ * sonore, le littoral et les espaces boisés viennent d'`environnement.js` ; les
+ * trois accès sont une lecture du relevé de commodités — la page précédente dit
+ * « école à 210 m », celle-ci dit ce que cela vaut.
  *
- * Rien n'est inventé pour combler : un champ que personne n'a renseigné et
- * qu'aucune source ne connaît descend à `null`, et la page écrit « Non
- * renseigné » — modifiable, comme tout le reste du rapport.
+ * Rien n'est inventé pour combler : un champ qu'aucune source ne sait fonder
+ * descend à `null`, et la page écrit « Non renseigné » — modifiable, comme tout
+ * le reste du rapport. C'est la règle entière du bloc, et la seule garantie que
+ * l'agent puisse signer ce qu'il remet.
  *
- * Une seule composition : la vue déclarée et le trait de côte se rejoignent en
+ * Les motifs suivent les valeurs : trois qualifications présumées et une
+ * mesurée, chacune avec la phrase qui dit d'où elle sort. Elles sont imprimées
+ * en aparté sous le bloc (voir `motifs`), et c'est ce qui sépare un constat d'un
+ * jugement — « Sud » seul est une affirmation, « Sud — façade principale, plus
+ * dégagée de ce côté » est un raisonnement que l'agent peut reprendre ou
+ * corriger devant le vendeur.
+ *
+ * Une seule composition : la vue relevée et le trait de côte se rejoignent en
  * une ligne, « Dégagée, mer ». C'est la forme sous laquelle un agent l'écrirait,
  * et il n'y a aucune raison de la lui faire assembler à la main.
  */
-function environnement(env, c = {}, poi = null) {
+function environnement(env, cadre = null, poi = null) {
   const acces = (id) => {
     const categorie = (poi?.categories ?? []).find((entree) => entree.id === id)
     return qualifierAcces(categorie)
   }
 
-  const vueDeclaree = VUE_LABELS[c.vue] ?? null
   const vueMer = env?.littoral?.vue === 'mer'
-  const vues = [vueDeclaree, vueMer ? 'mer' : null].filter(Boolean).join(', ') || null
+  const vues =
+    [cadre?.vue?.label ?? null, vueMer ? 'mer' : null].filter(Boolean).join(', ') || null
 
   const lignes = [
     champ('env.vues', 'Vues', vues),
-    champ('env.exposition', 'Exposition principale', EXPOSITION_LABELS[c.exposition] ?? null),
-    champ('env.luminosite', 'Luminosité', LUMINOSITE_LABELS[c.luminosite] ?? null),
+    champ('env.exposition', 'Exposition principale', cadre?.exposition?.label ?? null),
+    champ('env.luminosite', 'Luminosité', cadre?.luminosite?.label ?? null),
     champ('env.sonore', 'Niveau sonore', env?.sonore?.niveau ?? null),
     // Libellés volontairement courts : le bloc est présenté en trois colonnes
     // sur une feuille A4 de 178 mm utiles, et « Accès commerces de proximité »
@@ -276,13 +270,26 @@ function environnement(env, c = {}, poi = null) {
     champ('env.verdure', 'Espaces verts', env?.espacesVerts ?? null),
   ]
 
+  // La mention de provenance, composée à partir des jeux de données que les deux
+  // relevés déclarent. Ils partagent la BD TOPO® : juxtaposer deux attributions
+  // toutes faites la citerait deux fois sous le même bloc.
+  const referentiels = [...(env?.sources ?? []), ...(cadre?.sources ?? [])].filter(
+    (nom, index, liste) => liste.indexOf(nom) === index,
+  )
+
   return {
     lignes,
-    // Le motif du niveau sonore, imprimé en aparté sous le bloc : « Passant »
-    // seul est un jugement, « Passant — axe routier structurant à moins de
-    // 150 m » est un constat que l'agent peut confirmer ou corriger.
-    motifSonore: env?.sonore?.motif ?? null,
-    source: env?.source ?? null,
+    // Les apartés, imprimés sous le bloc et modifiables comme le reste. Chacun
+    // porte sa clé propre : l'agent qui corrige une valeur doit pouvoir corriger
+    // la phrase qui la justifie, sans quoi le rapport se contredirait.
+    motifs: [
+      { cle: 'env.sonore.motif', texte: env?.sonore?.motif ?? null },
+      { cle: 'env.exposition.motif', texte: cadre?.exposition?.motif ?? null },
+      { cle: 'env.vues.motif', texte: cadre?.vue?.motif ?? null },
+      { cle: 'env.luminosite.motif', texte: cadre?.luminosite?.motif ?? null },
+    ].filter((motif) => motif.texte !== null),
+    source:
+      referentiels.length > 0 ? `© IGN — ${referentiels.join(', ')} (Géoplateforme)` : null,
   }
 }
 
@@ -680,11 +687,7 @@ export function construireModele({
     description: {
       ...caracteristiques(characteristics ?? {}),
       ...points(rapport?.points),
-      environnement: environnement(
-        rapport?.environnement,
-        characteristics ?? {},
-        rapport?.poi,
-      ),
+      environnement: environnement(rapport?.environnement, rapport?.cadre, rapport?.poi),
     },
     photos: photos(characteristics?.photos),
     commodites: commodites(rapport?.poi, { lat, lon }),

@@ -34,85 +34,104 @@ export function EstimationAddressStep({ onBack, onConfirm }) {
   }, [address, mappable, onConfirm])
 
   return (
-    /* Deux colonnes au-delà du portable : la saisie à gauche, la tour à droite.
-       Sur écran étroit, la grille retombe en une colonne et la tour disparaît —
-       elle a besoin de sa hauteur pour exister, et un immeuble de six
-       centimètres coincé sous un champ de formulaire n'est plus un immeuble. */
-    <div className="w-full max-w-xl lg:max-w-6xl">
-      <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
-        <div className="mx-auto w-full max-w-xl">
-          {onBack ? (
-            <button
-              type="button"
-              onClick={onBack}
-              className="group mb-8 inline-flex touch-manipulation items-center gap-2 font-mono text-[0.7rem] uppercase tracking-micro text-ink/45 transition-colors hover:text-ink"
-            >
-              <ArrowLeft
-                className="h-4 w-4 transition-transform duration-300 ease-plan group-hover:-translate-x-1"
-                strokeWidth={1.75}
-                aria-hidden="true"
-              />
-              Retour
-            </button>
-          ) : null}
+    /* Une seule colonne, centrée, et l'immeuble derrière elle.
 
-          {/* L'écusson, au-dessus du titre — à la place de la rangée d'icônes
-              (immeuble, maison, arbre) qui poussaient du sol en boucle. Elles
-              disaient « immobilier » ; l'écusson dit qui estime, ce qui est la
-              seule chose que cet écran ait à annoncer. La tour de droite dit le
-              reste, et elle le dit mieux qu'un pictogramme de quatorze pixels.
+       Il tenait auparavant une seconde colonne, à droite de la saisie : deux
+       sujets de poids visuel comparable, côte à côte, qui se disputaient le
+       regard sur un écran dont la seule fonction est de faire taper une
+       adresse. Il est maintenant posé en fond, centré sur le titre et très peu
+       contrasté — un décor, ce qu'il aurait toujours dû être. */
+    <div className="mx-auto w-full max-w-xl">
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="group relative z-10 mb-8 inline-flex touch-manipulation items-center gap-2 font-mono text-[0.7rem] uppercase tracking-micro text-ink/45 transition-colors hover:text-ink"
+        >
+          <ArrowLeft
+            className="h-4 w-4 transition-transform duration-300 ease-plan group-hover:-translate-x-1"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+          Retour
+        </button>
+      ) : null}
 
-              `arrivee` lui fait tomber les quelques pixels de son entrée, et le
-              sautillement prend la suite sans rupture — les deux animations
-              finissent à `translateY(0)`. */}
-          <LogoBarnes mouvement="saut" arrivee className="mx-auto mb-6 h-16 w-16" />
+      {/* L'écusson, au-dessus du titre — à la place de la rangée d'icônes
+          (immeuble, maison, arbre) qui poussaient du sol en boucle. Elles
+          disaient « immobilier » ; l'écusson dit qui estime, ce qui est la
+          seule chose que cet écran ait à annoncer.
 
-          <h1 className="text-center font-display text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">
-            Où se situe le bien&nbsp;?
-          </h1>
-          <p className="mx-auto mt-4 max-w-md text-center text-base leading-relaxed text-ink/55">
-            Commencez à saisir l’adresse, puis choisissez-la dans la liste.
-          </p>
+          `arrivee` lui fait tomber les quelques pixels de son entrée, et le
+          sautillement prend la suite sans rupture — les deux animations
+          finissent à `translateY(0)`. */}
+      <LogoBarnes mouvement="saut" arrivee className="relative z-10 mx-auto mb-6 h-16 w-16" />
 
-          <div className="mt-8">
-            <AddressAutocomplete onSelect={setAddress} autoFocus />
-          </div>
+      {/* Le titre, et l'immeuble centré dessus.
 
-          {address ? (
-            <div
-              role="status"
-              className="mt-6 flex items-start gap-3 rounded-xl border border-bottle/20 bg-bottle/5 px-4 py-4 text-left sm:px-5"
-            >
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-bottle">
-                <Check className="h-3 w-3 text-white" strokeWidth={3} aria-hidden="true" />
-              </span>
-              <span>
-                <span className="block font-mono text-[0.62rem] uppercase tracking-micro text-bottle">
-                  Adresse confirmée
-                </span>
-                <span className="mt-1.5 block text-[0.95rem] leading-relaxed text-ink/75">{address.label}</span>
-              </span>
-            </div>
-          ) : null}
+          Le décor est ancré sur la boîte du titre, et sur elle seule : c'est
+          « Où se situe le bien ? » qui doit se trouver au milieu de l'immeuble.
+          Ancré sur le bloc de tête entier — écusson, titre, consigne —, le
+          dessin descendait d'une trentaine de pixels sous sa cible. */}
+      <div className="relative">
+        {/* L'immeuble à l'encre, en fond.
 
-          {address && !mappable ? (
-            <p role="status" className="mt-4 text-center text-base text-ink/45">
-              Cette adresse n’est pas localisable sur la carte. Essayez une adresse voisine.
-            </p>
-          ) : null}
-        </div>
+            Trois réglages, et ils tiennent ensemble : il est **centré sur le
+            titre** (`inset-y-0` + `items-center`), **beaucoup plus pâle**
+            (`opacity-[0.09]`) et **plus grand** qu'avant (52 rem contre 44).
+            L'agrandissement est ce qui paie la baisse d'opacité : un décor très
+            pâle et petit ne se voit plus du tout ; très pâle et large, il donne
+            une texture à la page sans disputer le titre. Il déborde volontiers
+            la colonne (`-inset-x-[35%]`), sans quoi un immeuble de cette largeur
+            serait rogné aux épaules.
 
-        {/* La Tour Barnes. Elle se construit seule en trois secondes et demie,
-            du socle à l'écusson, et ne rejoue pas : c'est une ouverture, pas
-            une boucle de fond d'écran — un immeuble qui se redessinerait en
-            continu derrière un champ de saisie deviendrait un clignotant.
+            `pointer-events-none` : il passe sous le champ de saisie, qui reste
+            cliquable sur toute sa surface.
 
-            `aria-hidden` : ce que cet écran demande est écrit à gauche, et un
+            `aria-hidden` : ce que cet écran demande est écrit par-dessus, et un
             lecteur d'écran n'a rien à faire d'un dessin d'immeuble. */}
-        <div aria-hidden="true" className="hidden justify-center lg:flex">
-          <TourEncre className="h-[76vh] max-h-[44rem] w-full" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-x-[35%] inset-y-0 hidden items-center justify-center sm:flex"
+        >
+          <TourEncre className="h-[88vh] max-h-[52rem] w-full opacity-[0.09]" />
         </div>
+
+        <h1 className="relative text-center font-display text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">
+          Où se situe le bien&nbsp;?
+        </h1>
       </div>
+
+      <p className="relative z-10 mx-auto mt-4 max-w-md text-center text-base leading-relaxed text-ink/55">
+        Commencez à saisir l’adresse, puis choisissez-la dans la liste.
+      </p>
+
+      <div className="relative z-10 mt-8">
+        <AddressAutocomplete onSelect={setAddress} autoFocus />
+      </div>
+
+      {address ? (
+        <div
+          role="status"
+          className="relative z-10 mt-6 flex items-start gap-3 rounded-xl border border-bottle/20 bg-bottle/5 px-4 py-4 text-left sm:px-5"
+        >
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-bottle">
+            <Check className="h-3 w-3 text-white" strokeWidth={3} aria-hidden="true" />
+          </span>
+          <span>
+            <span className="block font-mono text-[0.62rem] uppercase tracking-micro text-bottle">
+              Adresse confirmée
+            </span>
+            <span className="mt-1.5 block text-[0.95rem] leading-relaxed text-ink/75">{address.label}</span>
+          </span>
+        </div>
+      ) : null}
+
+      {address && !mappable ? (
+        <p role="status" className="relative z-10 mt-4 text-center text-base text-ink/45">
+          Cette adresse n’est pas localisable sur la carte. Essayez une adresse voisine.
+        </p>
+      ) : null}
     </div>
   )
 }

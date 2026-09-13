@@ -21,13 +21,56 @@
 const MARINE = '#3C3C3C'
 const CORAIL = '#B4002F'
 
+/** Hauteur des deux lignes d'étiquettes, retirée de la zone de tracé. */
+const ETIQUETTES_PX = 32
+
+/** En deçà, une barre cesse d'être visible ; au-dessus de zéro, elle doit l'être. */
+const BARRE_MIN_PX = 3
+
+/**
+ * Largeur maximale d'une barre.
+ *
+ * ── Ce que corrige ce plafond ─────────────────────────────────────────────
+ *
+ * Les barres se partageaient la largeur disponible, à parts égales et sans
+ * limite. Sur l'historique des ventes, qui porte une dizaine de millésimes,
+ * cela donne des barres fines et une figure lisible. Sur la population aux
+ * recensements, qui en porte trois, cela donnait trois pavés de cinquante
+ * millimètres de large sur trente de haut, presque de la même hauteur — la
+ * population d'un quartier ne double pas d'un recensement à l'autre.
+ *
+ * Un rectangle plus large que haut, dans un ton uni et pâle, ne se lit pas
+ * comme une barre : il se lit comme un bloc de couleur, et une figure faite de
+ * trois blocs de couleur se lit comme un emplacement resté vide. C'était le
+ * rapport qu'on en faisait, et il était juste — ce n'était pas une figure.
+ *
+ * Trente-quatre pixels est la largeur d'une barre lisible : assez large pour
+ * porter sa valeur en dessous, assez étroite pour être plus haute que large sur
+ * toute l'échelle utile. Au-delà de huit points, le partage reprend la main et
+ * le plafond ne joue plus.
+ */
+const BARRE_MAX_PX = 34
+
 /**
  * Barres verticales — historique des ventes, population aux recensements.
  *
+ * Trois choses distinguent cette figure d'un simple empilement de rectangles,
+ * et il en faut trois : c'est ce qui manquait quand elle ne portait qu'une
+ * série courte.
+ *
+ *  1. **Une ligne de base.** Un trait continu sous les barres, d'un bord à
+ *     l'autre. C'est lui qui dit « ceci est un axe », et donc que ce qui est
+ *     posé dessus est une mesure.
+ *  2. **Une graduation haute**, en pointillé, au niveau du maximum de la série,
+ *     avec sa valeur en clair. L'échelle cesse d'être implicite : on lit la
+ *     hauteur d'une barre contre quelque chose.
+ *  3. **Des barres plus hautes que larges** (voir `BARRE_MAX_PX`).
+ *
  * L'échelle part de zéro et non du minimum de la série : sur des volumes de
- * ventes, une base tronquée transforme une variation de 5 % en un doublement
- * apparent. C'est le genre de raccourci graphique qu'un avis de valeur ne peut
- * pas se permettre.
+ * ventes comme sur une population, une base tronquée transforme une variation
+ * de 5 % en un doublement apparent. C'est le genre de raccourci graphique qu'un
+ * avis de valeur ne peut pas se permettre — et c'est aussi pourquoi trois
+ * barres presque égales *doivent* se ressembler : c'est l'information.
  *
  * ── Pourquoi les hauteurs sont en pixels, et non en pourcentage ───────────
  *
@@ -45,61 +88,97 @@ const CORAIL = '#B4002F'
  * calculé, à l'écran comme sur la feuille. Les étiquettes, elles, sont sorties
  * de la zone de tracé et ne peuvent plus la comprimer.
  */
-
-/** Hauteur des deux lignes d'étiquettes, retirée de la zone de tracé. */
-const ETIQUETTES_PX = 32
-
-/** En deçà, une barre cesse d'être visible ; au-dessus de zéro, elle doit l'être. */
-const BARRE_MIN_PX = 3
-
 export function Barres({ points, hauteur = 132, accentDernier = true, legende }) {
   if (!points || points.length === 0) return null
 
   const max = Math.max(...points.map((p) => p.valeur), 1)
   const zone = Math.max(hauteur - ETIQUETTES_PX, 24)
+  // L'étiquette du maximum reprend le format de la série : c'est `label` qui
+  // porte le nombre déjà mis en forme (séparateurs de milliers, unité), et il
+  // n'y a pas de raison d'en écrire un second ici.
+  const etiquetteMax = points.find((p) => p.valeur === max)?.label ?? null
 
   return (
     <figure className="mt-1">
       <div
         role="img"
         aria-label={legende ?? points.map((p) => `${p.annee} : ${p.label}`).join(', ')}
-        className="flex items-end gap-2"
       >
-        {points.map((point, index) => {
-          const dernier = index === points.length - 1
-          const hauteurBarre =
-            point.valeur > 0
-              ? Math.max(Math.round((point.valeur / max) * zone), BARRE_MIN_PX)
-              : 0
+        {/* La graduation haute, hors de la zone de tracé : elle en marque le
+            plafond sans en consommer la hauteur. */}
+        {etiquetteMax ? (
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="h-px flex-1"
+              style={{
+                backgroundImage: `repeating-linear-gradient(to right, ${MARINE}33 0 3px, transparent 3px 6px)`,
+              }}
+            />
+            {/* L'étiquette est posée à droite, contre le bord du cadre, et non
+                au départ du trait : la valeur maximale est déjà écrite au-dessus
+                de la barre qui la porte, et les deux se superposeraient dès que
+                cette barre est la première de la série — ce qui est le cas d'un
+                quartier dont la population décline. */}
+            <span className="font-mono text-[0.5rem] uppercase tracking-micro text-marine/35">
+              {etiquetteMax}
+            </span>
+          </div>
+        ) : null}
 
-          return (
-            <div key={point.annee} className="flex flex-1 flex-col justify-end">
-              <span className="mb-1 block text-center font-mono text-[0.56rem] leading-none text-marine/55">
-                {point.label}
-              </span>
-              {/* La zone de tracé, de hauteur fixe : c'est elle qui garantit
-                  que deux barres de la même figure se comparent, et que la
-                  figure occupe la même place quelle que soit la série. */}
-              <span
-                aria-hidden="true"
-                className="flex w-full items-end"
-                style={{ height: `${zone}px` }}
-              >
+        <div className="flex items-end gap-2 border-b border-marine/25">
+          {points.map((point, index) => {
+            const dernier = index === points.length - 1
+            const hauteurBarre =
+              point.valeur > 0
+                ? Math.max(Math.round((point.valeur / max) * zone), BARRE_MIN_PX)
+                : 0
+
+            return (
+              <div key={point.annee} className="flex flex-1 flex-col justify-end">
+                <span className="mb-1 block text-center font-mono text-[0.56rem] leading-none text-marine/55">
+                  {point.label}
+                </span>
+                {/* La zone de tracé, de hauteur fixe : c'est elle qui garantit
+                    que deux barres de la même figure se comparent, et que la
+                    figure occupe la même place quelle que soit la série. */}
                 <span
-                  className="block w-full rounded-t-[3px]"
-                  style={{
-                    height: `${hauteurBarre}px`,
-                    backgroundColor: accentDernier && dernier ? CORAIL : MARINE,
-                    opacity: accentDernier && dernier ? 1 : 0.22 + (index / points.length) * 0.5,
-                  }}
-                />
-              </span>
-              <span className="mt-1.5 block text-center font-mono text-[0.56rem] uppercase leading-none tracking-micro text-marine/40">
-                {point.annee}
-              </span>
-            </div>
-          )
-        })}
+                  aria-hidden="true"
+                  className="flex w-full items-end justify-center"
+                  style={{ height: `${zone}px` }}
+                >
+                  <span
+                    className="block w-full rounded-t-[3px]"
+                    style={{
+                      height: `${hauteurBarre}px`,
+                      maxWidth: `${BARRE_MAX_PX}px`,
+                      backgroundColor: accentDernier && dernier ? CORAIL : MARINE,
+                      // Le dégradé d'opacité fait lire la série de gauche à
+                      // droite. Son plancher est relevé à 0,4 : à 0,22, la
+                      // première barre d'une série courte passait pour un
+                      // aplat de fond plutôt que pour une donnée.
+                      opacity: accentDernier && dernier ? 1 : 0.4 + (index / points.length) * 0.4,
+                    }}
+                  />
+                </span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Les millésimes, sous l'axe — c'est leur place sur une figure à
+            barres, et c'est ce qui fait de la ligne de base un axe plutôt
+            qu'un simple filet. */}
+        <div className="flex gap-2 pt-1.5">
+          {points.map((point) => (
+            <span
+              key={point.annee}
+              className="flex-1 text-center font-mono text-[0.56rem] uppercase leading-none tracking-micro text-marine/40"
+            >
+              {point.annee}
+            </span>
+          ))}
+        </div>
       </div>
     </figure>
   )

@@ -1,96 +1,93 @@
-import { Trait } from './encre'
+import { Touche, Trait } from './encre'
 import { LOGO_BARNES_SRC } from '../ui/LogoBarnes'
 
 /**
- * La Tour Barnes — le grand dessin à l'encre du parcours.
+ * L'Immeuble Barnes — le grand dessin à l'encre de l'écran d'adresse.
  *
- * Un immeuble à retraits successifs, tracé au pinceau, qui sort du sol et se
- * coiffe de l'écusson rouge une fois debout. Il tient la moitié droite de
- * l'écran d'adresse et accompagne le formulaire de caractéristiques, où il
- * monte à mesure que l'agent répond.
+ * Un immeuble de rapport tracé au pinceau, qui sort du sol étage par étage et
+ * se coiffe de l'écusson une fois le toit posé. Il est posé en fond de l'écran
+ * d'adresse, centré sur le titre, et n'y tient plus le rôle d'illustration mais
+ * celui de décor : très peu contrasté, large, derrière le texte.
  *
- * ── Deux régimes, un seul dessin ──────────────────────────────────────────
+ * ── Ce que le dessin a changé, et pourquoi ────────────────────────────────
  *
- * `progression` décide duquel :
+ * La version précédente était une tour à retraits successifs — cinq ressauts en
+ * quatorze bandes, du socle à la flèche. Le motif existe (les gratte-ciel
+ * américains des années trente), mais à cette échelle et sans perspective il ne
+ * se lisait pas comme un immeuble : chaque retrait ramenait la largeur d'un
+ * sixième, et l'empilement de galettes de plus en plus petites évoquait une
+ * pièce montée. Le défaut était de proportions, pas de trait.
  *
- *  - **`null` — la tour se construit seule.** Les tranches se tracent l'une
- *    après l'autre, du sol vers le ciel, et l'écusson se pose au sommet. Trois
- *    secondes et demie en tout, écusson compris : c'est le temps que met un
- *    utilisateur à lire un titre et à commencer à taper une adresse, et la
- *    scène doit être finie quand son regard revient.
+ * Le dessin actuel est celui d'un immeuble de ville ordinaire, et ses cotes
+ * viennent de là :
  *
- *  - **`0` à `1` — la tour suit le formulaire.** Le nombre de tranches
- *    dessinées est proportionnel à l'avancement, et l'écusson n'apparaît qu'à
- *    la dernière. Chaque tranche s'ajoute avec son propre tracé, si bien que
- *    remplir un champ *dessine* un étage de plus plutôt que d'en révéler un
- *    déjà là.
- *
- * ── Pourquoi des tranches, et pas un seul tracé ───────────────────────────
- *
- * Le dessin est découpé en une quinzaine de bandes horizontales, du socle à la
- * flèche. C'est ce découpage qui permet aux deux régimes de partager le même
- * dessin : l'un joue toutes les tranches sur une minuterie CSS, l'autre n'en
- * monte qu'un préfixe. Sans lui, il faudrait deux illustrations à tenir en
- * phase — et elles divergeraient à la première retouche.
- *
- * Il donne aussi le geste juste. Un bâtiment se construit par le bas : chaque
- * tranche part de son propre plancher et monte, et les délais suivent le même
- * ordre. Inverser les délais ferait descendre la tour dans le sol.
+ *  - **Un seul volume, et un seul retrait.** Sept niveaux de même largeur, puis
+ *    un étage attique en retrait sous le toit — la silhouette d'un immeuble
+ *    haussmannien surélevé, qui est ce qu'un vendeur français reconnaît.
+ *  - **Un rapport hauteur / largeur de 2,4.** Un immeuble de huit niveaux sur
+ *    une parcelle de dix-sept mètres. Au-delà de 3, on dessine une tour ; en
+ *    deçà de 2, un bloc.
+ *  - **Une hauteur d'étage constante de 48 unités pour 168 de largeur** —
+ *    le rapport réel d'un plafond de trois mètres sur une façade de dix.
+ *  - **Un vrai toit à deux pans**, avec ses lucarnes et ses souches de
+ *    cheminée. C'est lui qui fait le plus de travail : un volume coupé net en
+ *    haut est un immeuble de bureaux, la même masse sous un toit est un
+ *    immeuble d'habitation.
+ *  - **Des fenêtres, et non des meneaux.** Les montants verticaux qui tenaient
+ *    lieu de fenêtres rayaient la façade du sol au toit et accentuaient l'effet
+ *    d'empilement. Des percements posés en rangs — cinq par étage, alignés
+ *    verticalement — donnent l'échelle d'un seul coup.
  *
  * ── Le trait ──────────────────────────────────────────────────────────────
  *
  * Le pinceau est celui de tout le parcours (voir `encre.jsx`). Rien n'est
- * parfaitement droit ici, et c'est l'essentiel du rendu « à la main » :
- * les verticales dérivent d'un demi-point, les planchers ne sont jamais tout à
- * fait horizontaux, les épaisseurs varient d'une tranche à l'autre. Une tour
- * tracée à la règle aurait l'air d'un schéma technique.
+ * parfaitement droit, et c'est l'essentiel du rendu « à la main » : les
+ * verticales dérivent d'un demi-point, les planchers ne sont jamais tout à fait
+ * horizontaux, les épaisseurs varient d'un niveau à l'autre. Un immeuble tracé
+ * à la règle aurait l'air d'un schéma technique.
+ *
+ * La scène se joue une fois, en trois secondes, et ne boucle pas : c'est une
+ * ouverture, pas un fond d'écran animé — un immeuble qui se redessinerait en
+ * continu derrière un champ de saisie deviendrait un clignotant.
  *
  * Le mode « moins d'animations » est couvert sans condition : le filet global
- * d'`index.css` ramène toute durée à 0,001 ms en gardant `forwards`, et la tour
- * s'affiche d'emblée terminée.
+ * d'`index.css` ramène toute durée à 0,001 ms en gardant `forwards`, et
+ * l'immeuble s'affiche d'emblée terminé.
  */
 
-/**
- * Le corps de la tour, tranche par tranche, du sol vers le ciel.
- *
- * Chaque entrée porte la demi-largeur du bâtiment à son pied et à son sommet,
- * la hauteur de la bande, et de quoi la détailler. Les retraits (`etage` qui
- * rétrécit) donnent la silhouette à degrés des tours des années trente —
- * choisie parce qu'elle se lit comme un immeuble de prestige à toutes les
- * échelles, là où un parallélépipède vitré aurait l'air d'un bloc de bureaux.
- *
- * Les cotes sont en unités de la `viewBox` (360 × 620), l'axe du bâtiment est
- * à x = 180, et le sol à y = 596.
- *
- * La `viewBox` est large au regard du bâtiment, et volontairement : c'est elle
- * qui fixe la taille à laquelle la tour se dessine dans sa colonne. Cadrée au
- * plus juste, une tour haute et fine se retrouve réduite par sa hauteur et
- * n'occupe plus qu'un sixième de la largeur disponible ; ces trois cent
- * soixante unités lui rendent l'ampleur qu'on lui demande.
- */
+/** Axe du bâtiment et ligne de sol, en unités de dessin. */
 const AXE = 180
 const SOL = 596
 
 /**
- * Bandes du bâtiment. `bas` et `haut` sont des ordonnées, `demi` la demi-
- * largeur au sommet de la bande — le pied reprend la largeur de la bande
- * précédente, ce qui dessine les retraits sans avoir à les décrire deux fois.
+ * Le cadre du dessin, resserré autour de lui : l'écusson en haut (y = 76), la
+ * ligne de sol en bas (y = 602), et deux poignées d'unités de marge. Voir le
+ * commentaire du rendu — c'est ce cadrage qui permet de centrer l'immeuble sur
+ * un titre sans le décaler.
+ */
+const VUE = '0 62 360 556'
+
+/**
+ * Les niveaux, du sol vers le ciel.
+ *
+ * `bas` et `haut` sont des ordonnées, `demi` la demi-largeur du niveau. Le pied
+ * de chaque niveau reprend la largeur de celui du dessous, ce qui dessine le
+ * ressaut de l'attique sans avoir à le décrire deux fois.
+ *
+ * La composition tient entre y = 168 (faîtage) et y = 602 (sol), soit 434
+ * unités pour 176 de largeur au rez-de-chaussée. Au-dessus du faîtage, un
+ * intervalle puis l'écusson, qui se pose de y = 76 à y = 138.
  */
 const BANDES = [
-  { bas: SOL, haut: 558, demi: 124, socle: true },
-  { bas: 558, haut: 512, demi: 112, fenetres: 6 },
-  { bas: 512, haut: 466, demi: 112, fenetres: 6 },
-  { bas: 466, haut: 420, demi: 112, fenetres: 6 },
-  { bas: 420, haut: 376, demi: 94, fenetres: 5 },
-  { bas: 376, haut: 332, demi: 94, fenetres: 5 },
-  { bas: 332, haut: 288, demi: 94, fenetres: 5 },
-  { bas: 288, haut: 246, demi: 74, fenetres: 4 },
-  { bas: 246, haut: 204, demi: 74, fenetres: 4 },
-  { bas: 204, haut: 166, demi: 54, fenetres: 3 },
-  { bas: 166, haut: 128, demi: 54, fenetres: 3 },
-  { bas: 128, haut: 96, demi: 34, fenetres: 2 },
-  { bas: 96, haut: 70, demi: 34 },
-  { bas: 70, haut: 46, demi: 14, couronne: true },
+  { bas: SOL, haut: 552, demi: 88, socle: true },
+  { bas: 552, haut: 504, demi: 84, fenetres: 5 },
+  { bas: 504, haut: 456, demi: 84, fenetres: 5 },
+  { bas: 456, haut: 408, demi: 84, fenetres: 5 },
+  { bas: 408, haut: 360, demi: 84, fenetres: 5 },
+  { bas: 360, haut: 312, demi: 84, fenetres: 5 },
+  { bas: 312, haut: 264, demi: 84, fenetres: 5 },
+  { bas: 264, haut: 222, demi: 70, fenetres: 4, attique: true },
+  { bas: 222, haut: 168, demi: 70, toit: true },
 ]
 
 /** Décalage de main : quelques dixièmes d'unité, jamais les mêmes. */
@@ -98,117 +95,284 @@ const tremble = (index, amplitude = 0.7) =>
   ((Math.sin(index * 12.9898) * 43758.5453) % 1) * amplitude
 
 /**
- * Une bande du bâtiment : ses deux montants, son plancher, et son détail.
+ * Une rangée de fenêtres, posées à l'encre.
+ *
+ * Les percements sont des aplats (`Touche`) et non des contours : à douze
+ * unités de large, un rectangle tracé au pinceau n'a pas de trajet — il
+ * clignoterait. Posés, ils se lisent comme des ouvertures sombres dans une
+ * façade claire, ce qu'ils sont.
+ *
+ * L'appui de fenêtre, lui, est un trait : c'est le détail qui empêche la rangée
+ * de ressembler à une grille de tableur.
+ */
+function Fenetres({ nombre, demi, bas, haut, retard }) {
+  if (!nombre) return null
+
+  const hauteurNiveau = bas - haut
+  // Le percement occupe la moitié de la hauteur d'étage, posé au tiers
+  // supérieur : c'est la position réelle d'une fenêtre entre son allège et son
+  // linteau, et c'est elle qui donne l'échelle du dessin.
+  const hauteurFenetre = hauteurNiveau * 0.46
+  const y = haut + hauteurNiveau * 0.26
+  const largeur = Math.min((2 * demi) / (nombre * 2.1), 15)
+
+  return Array.from({ length: nombre }, (_, rang) => {
+    const part = (rang + 1) / (nombre + 1)
+    const x = AXE - demi + 2 * demi * part - largeur / 2
+
+    return (
+      <g key={rang}>
+        <Touche
+          x={x}
+          y={y}
+          largeur={largeur}
+          hauteur={hauteurFenetre}
+          retard={retard + 0.14 + rang * 0.04}
+          duree={0.4}
+          opacite={0.2}
+        />
+        <Trait
+          d={`M ${x - 1.6} ${y + hauteurFenetre + 1.4} L ${x + largeur + 1.6} ${y + hauteurFenetre + 1.2}`}
+          duree={0.22}
+          retard={retard + 0.18 + rang * 0.04}
+          largeur={0.9}
+          opacite={0.5}
+        />
+      </g>
+    )
+  })
+}
+
+/**
+ * Le toit — deux pans, un faîtage, deux souches et deux lucarnes.
+ *
+ * C'est la pièce qui fait lire « immeuble d'habitation » plutôt que « bloc », et
+ * elle mérite ses quelques traits : un volume coupé net en haut reste un
+ * parallélépipède quelle que soit la qualité de sa façade.
+ *
+ * L'avant-toit déborde de six unités de part et d'autre. Un toit à l'aplomb
+ * exact des murs ne se distingue pas d'un couronnement plein ; c'est le
+ * débord — et l'ombre qu'il porte — qui le détache.
+ */
+function Toit({ bas, haut, demi, retard, d }) {
+  const debord = demi + 6
+  const faite = 26
+
+  return (
+    <g>
+      {/* La corniche, sur toute la largeur de l'avant-toit : c'est l'assise du
+          toit, et le trait le plus épais du dessin après le socle. */}
+      <Trait
+        d={`M ${AXE - debord} ${bas} L ${AXE + debord} ${bas + d * 0.3 - 0.15}`}
+        duree={0.35}
+        retard={retard}
+        largeur={2.6}
+      />
+
+      {/* Les deux pans, tracés du bas vers le faîtage — le geste de quelqu'un
+          qui monte une charpente. */}
+      <Trait
+        d={`M ${AXE - debord} ${bas} L ${AXE - faite - d * 0.4} ${haut}`}
+        duree={0.4}
+        retard={retard + 0.08}
+        largeur={2.1}
+      />
+      <Trait
+        d={`M ${AXE + debord} ${bas} L ${AXE + faite + d * 0.4} ${haut}`}
+        duree={0.4}
+        retard={retard + 0.12}
+        largeur={2.1}
+      />
+      <Trait
+        d={`M ${AXE - faite} ${haut} L ${AXE + faite} ${haut + d * 0.3 - 0.15}`}
+        duree={0.28}
+        retard={retard + 0.2}
+        largeur={1.9}
+      />
+
+      {/* Deux lucarnes sur le pan visible, décalées de l'axe : centrées, elles
+          se confondraient avec le faîtage. */}
+      {[-1, 1].map((cote) => {
+        const x = AXE + cote * 32
+        const yBas = bas - 14
+        const yHaut = yBas - 15
+        return (
+          <g key={cote}>
+            <Trait
+              d={`M ${x - 7} ${yBas} L ${x - 7} ${yHaut + 4} L ${x} ${yHaut} L ${x + 7} ${yHaut + 4} L ${x + 7} ${yBas}`}
+              duree={0.3}
+              retard={retard + 0.26 + (cote > 0 ? 0.05 : 0)}
+              largeur={1.1}
+              opacite={0.75}
+            />
+            <Touche
+              x={x - 4}
+              y={yHaut + 6}
+              largeur={8}
+              hauteur={9}
+              retard={retard + 0.34 + (cote > 0 ? 0.05 : 0)}
+              duree={0.35}
+              opacite={0.18}
+            />
+          </g>
+        )
+      })}
+
+      {/* Les souches de cheminée, posées en dernier : elles dépassent le
+          faîtage, et rien ne doit être tracé par-dessus.
+
+          Leur assise suit la pente — une souche posée à hauteur constante
+          flotterait au-dessus du pan d'un côté et s'y enfoncerait de l'autre.
+          L'ordonnée est donc interpolée entre l'avant-toit et le faîtage, à
+          l'abscisse de la souche. */}
+      {[-1, 1].map((cote) => {
+        const ecart = 52
+        const x = AXE + cote * ecart
+        const t = (ecart - faite) / (debord - faite)
+        const yAssise = haut + t * (bas - haut)
+
+        return (
+          <Trait
+            key={`souche-${cote}`}
+            d={`M ${x - 5} ${yAssise} L ${x - 5} ${yAssise - 20} L ${x + 5} ${yAssise - 20} L ${x + 5} ${yAssise + 3}`}
+            duree={0.3}
+            retard={retard + 0.4 + (cote > 0 ? 0.04 : 0)}
+            largeur={1.5}
+            opacite={0.85}
+          />
+        )
+      })}
+    </g>
+  )
+}
+
+/**
+ * Un niveau du bâtiment : son plancher, ses deux montants, ses percements.
  *
  * Le plancher est tracé en premier, les montants ensuite : c'est l'ordre dans
  * lequel on le dessinerait — on pose l'assise, puis on monte les murs.
  */
-function Bande({ bande, index, demiPrecedent, retard, actif }) {
-  const { bas, haut, demi, fenetres = 0, socle = false, couronne = false } = bande
+function Bande({ bande, index, demiPrecedent, retard }) {
+  const { bas, haut, demi, fenetres = 0, socle = false, attique = false, toit = false } = bande
   const pied = demiPrecedent ?? demi
   const d = tremble(index)
   const duree = 0.42
 
-  // Le pied de la bande reprend la largeur de celle du dessous : c'est cette
-  // différence qui dessine le ressaut. Le sommet, lui, est à la largeur propre
-  // de la bande — sauf sur la couronne, seule à s'effiler.
-  const gauchePied = AXE - pied + d
-  const droitePied = AXE + pied - d
-  const gaucheHaut = AXE - (couronne ? demi : demi) - d * 0.5
-  const droiteHaut = AXE + (couronne ? demi : demi) + d * 0.5
-  // Les montants sont verticaux, et c'est ce qui fait la silhouette : un
-  // gratte-ciel à degrés monte droit et se retire d'un coup, il ne s'effile
-  // pas. Tracés obliques d'une largeur à l'autre, les quatorze bandes
-  // accumulaient leurs pentes et la tour prenait l'allure d'un cône.
-  const gaucheMontant = couronne ? gaucheHaut : AXE - demi - d * 0.4
-  const droiteMontant = couronne ? droiteHaut : AXE + demi + d * 0.4
+  if (toit) return <Toit bas={bas} haut={haut} demi={demi} retard={retard} d={d} />
+
+  const ressaut = pied !== demi
 
   return (
     <g>
       {/* Le plancher, tracé sur toute la largeur du niveau inférieur : c'est
-          lui qui forme la corniche du ressaut quand la bande se rétrécit.
+          lui qui forme la corniche du ressaut quand le bâtiment se retire.
           Jamais tout à fait horizontal — deux dixièmes d'unité de dérive
           suffisent à lui ôter l'air d'un trait de règle. */}
       <Trait
-        d={`M ${gauchePied} ${bas} L ${droitePied} ${bas + d * 0.4 - 0.2}`}
+        d={`M ${AXE - pied + d} ${bas} L ${AXE + pied - d} ${bas + d * 0.4 - 0.2}`}
         duree={duree * 0.7}
         retard={retard}
-        largeur={socle || pied !== demi ? 2.4 : 1.35}
-        opacite={socle || pied !== demi ? 1 : 0.78}
+        largeur={socle || ressaut ? 2.4 : 1.2}
+        opacite={socle || ressaut ? 1 : 0.6}
       />
 
+      {/* Les montants, verticaux. Une façade d'immeuble monte droit ; tracés
+          obliques d'une largeur à l'autre, les niveaux accumuleraient leurs
+          pentes et le bâtiment prendrait l'allure d'un tronc de pyramide. */}
       <Trait
-        d={`M ${AXE - demi - d * 0.4} ${bas} L ${gaucheMontant} ${haut}`}
+        d={`M ${AXE - demi - d * 0.4} ${bas} L ${AXE - demi + d * 0.3} ${haut}`}
         duree={duree}
         retard={retard + 0.06}
-        largeur={socle ? 2.6 : 2.2}
+        largeur={socle ? 2.6 : 2.1}
       />
       <Trait
-        d={`M ${AXE + demi + d * 0.4} ${bas} L ${droiteMontant} ${haut}`}
+        d={`M ${AXE + demi + d * 0.4} ${bas} L ${AXE + demi - d * 0.3} ${haut}`}
         duree={duree}
         retard={retard + 0.1}
-        largeur={socle ? 2.6 : 2.2}
+        largeur={socle ? 2.6 : 2.1}
       />
 
-      {/* Les meneaux verticaux — le détail qui fait lire « immeuble » plutôt
-          que « prisme ». Ils s'arrêtent avant le plancher supérieur, comme un
-          trait de pinceau qu'on relève. */}
-      {Array.from({ length: fenetres }, (_, rang) => {
-        const part = (rang + 1) / (fenetres + 1)
-        const xBas = AXE - demi + 2 * demi * part
-        const xHaut = gaucheMontant + (droiteMontant - gaucheMontant) * part
-        return (
-          <Trait
-            key={rang}
-            d={`M ${xBas} ${bas - 3} L ${xHaut} ${haut + 5}`}
-            duree={0.3}
-            retard={retard + 0.16 + rang * 0.05}
-            largeur={0.85}
-            opacite={0.45}
-          />
-        )
-      })}
+      <Fenetres nombre={fenetres} demi={demi} bas={bas} haut={haut} retard={retard} />
 
-      {/* La flèche, une fois la couronne posée : c'est elle qui portera
-          l'écusson. */}
-      {couronne ? (
-        <Trait
-          d={`M ${AXE} ${haut} L ${AXE + d * 0.3} ${haut - 22}`}
-          duree={0.35}
-          retard={retard + 0.24}
-          largeur={1.6}
-        />
-      ) : null}
-
-      {/* Les marches du socle, hachurées : elles ancrent le bâtiment au sol au
-          lieu de le laisser posé dessus. */}
-      {socle
-        ? [0.35, 0.5, 0.65].map((part, rang) => (
-            <Trait
-              key={part}
-              d={`M ${AXE - pied * part} ${SOL + 6} L ${AXE + pied * part} ${SOL + 6 - rang * 3}`}
-              duree={0.26}
-              retard={retard + 0.3 + rang * 0.06}
-              largeur={1}
-              opacite={0.4}
-            />
-          ))
+      {/* La balustrade de l'attique : quelques balustres sur la corniche du
+          retrait. C'est ce qui transforme le ressaut en terrasse plutôt qu'en
+          simple rétrécissement. */}
+      {attique
+        ? [-2, -1, 0, 1, 2].map((rang) => {
+            const x = AXE + rang * 28
+            return (
+              <Trait
+                key={`bal${rang}`}
+                d={`M ${x} ${bas} L ${x} ${bas - 7}`}
+                duree={0.2}
+                retard={retard + 0.1 + Math.abs(rang) * 0.03}
+                largeur={0.9}
+                opacite={0.4}
+              />
+            )
+          })
         : null}
 
+      {/* Le rez-de-chaussée : une porte cochère au centre, deux percements
+          hauts de part et d'autre. Un socle vide donnerait un immeuble posé sur
+          un mur plein, ce qui n'existe pas en ville. */}
+      {socle ? (
+        <g>
+          <Trait
+            d={`M ${AXE - 17} ${bas} L ${AXE - 17} ${haut + 8} Q ${AXE} ${haut - 1} ${AXE + 17} ${haut + 8} L ${AXE + 17} ${bas}`}
+            duree={0.5}
+            retard={retard + 0.18}
+            largeur={1.7}
+          />
+          <Touche
+            x={AXE - 14}
+            y={haut + 11}
+            largeur={28}
+            hauteur={bas - haut - 11}
+            retard={retard + 0.3}
+            duree={0.5}
+            opacite={0.14}
+          />
+          {[-1, 1].map((cote) => (
+            <Touche
+              key={cote}
+              x={AXE + cote * 48 - 9}
+              y={haut + 12}
+              largeur={18}
+              hauteur={20}
+              retard={retard + 0.34 + (cote > 0 ? 0.04 : 0)}
+              duree={0.4}
+              opacite={0.18}
+            />
+          ))}
+          {/* Les marches, hachurées : elles ancrent le bâtiment au sol au lieu
+              de le laisser posé dessus. */}
+          {[0.3, 0.42].map((part, rang) => (
+            <Trait
+              key={part}
+              d={`M ${AXE - pied * part} ${SOL + 5 + rang * 3} L ${AXE + pied * part} ${SOL + 5 + rang * 3 - 0.4}`}
+              duree={0.26}
+              retard={retard + 0.42 + rang * 0.06}
+              largeur={1.1}
+              opacite={0.45}
+            />
+          ))}
+        </g>
+      ) : null}
+
       {/* Ombre portée sur la face gauche — quelques hachures obliques, le
-          minimum pour que le volume se lise. Elles n'apparaissent que sur les
-          bandes larges, où il y a de la place pour elles. */}
-      {actif && demi >= 72
-        ? [0.2, 0.34, 0.48].map((part, rang) => {
+          minimum pour que le volume se lise. */}
+      {!socle
+        ? [0.06, 0.13].map((part, rang) => {
             const x = AXE - demi + 2 * demi * part
             return (
               <Trait
                 key={`h${part}`}
-                d={`M ${x} ${bas - 6} L ${x - 6} ${haut + 10}`}
+                d={`M ${x} ${bas - 5} L ${x - 4} ${haut + 8}`}
                 duree={0.3}
-                retard={retard + 0.2 + rang * 0.04}
+                retard={retard + 0.22 + rang * 0.04}
                 largeur={0.6}
-                opacite={0.14}
+                opacite={0.13}
               />
             )
           })
@@ -218,77 +382,65 @@ function Bande({ bande, index, demiPrecedent, retard, actif }) {
 }
 
 /**
- * Cadence de construction en régime autonome.
+ * Cadence de construction.
  *
- * Quatorze bandes à 0,18 s d'intervalle, plus le temps de tracé de la dernière
- * et la pose de l'écusson : la scène est achevée un peu avant la quatrième
- * seconde. C'est la contrainte de l'écran d'adresse — elle doit être finie
- * quand le regard revient sur le champ de saisie, et une ouverture qui dure
- * plus de quatre secondes se met à retarder l'utilisateur au lieu de
- * l'accueillir.
+ * Neuf niveaux à 0,2 s d'intervalle, plus le temps de tracé du toit et la pose
+ * de l'écusson : la scène est achevée un peu avant la troisième seconde. C'est
+ * la contrainte de l'écran d'adresse — elle doit être finie quand le regard
+ * revient sur le champ de saisie, et une ouverture qui dure plus de quatre
+ * secondes retarde l'utilisateur au lieu de l'accueillir.
  */
-const PAS_S = 0.18
+const PAS_S = 0.2
 const RETARD_INITIAL_S = 0.25
+const RETARD_ECUSSON_S = RETARD_INITIAL_S + BANDES.length * PAS_S + 0.25
 
-export function TourEncre({ progression = null, className = '', titre }) {
-  const autonome = progression === null
-
-  // Nombre de bandes réellement dessinées. En régime autonome, toutes — les
-  // délais suffisent à les échelonner. En régime piloté, le préfixe qui
-  // correspond à l'avancement, et jamais moins d'une : une tour à zéro bande
-  // n'est pas une tour qui n'a pas commencé, c'est un écran vide.
-  const bandes = autonome
-    ? BANDES.length
-    : Math.max(1, Math.round(Math.min(Math.max(progression, 0), 1) * BANDES.length))
-
-  const achevee = bandes === BANDES.length
-  // L'écusson se pose après la dernière bande. En régime piloté il arrive au
-  // moment où elle est dessinée, sans attendre : l'agent vient de finir son
-  // formulaire, la récompense ne doit pas se faire désirer.
-  const retardEcusson = autonome ? RETARD_INITIAL_S + BANDES.length * PAS_S + 0.15 : 0.25
-
+export function TourEncre({ className = '', titre }) {
   return (
+    /* La `viewBox` est cadrée au plus juste sur le dessin — de l'écusson
+       (y = 76) à la ligne de sol (y = 602) —, à quelques unités près de part et
+       d'autre. C'est ce qui permet de poser le dessin centré sur un titre sans
+       avoir à le décaler : le centre de la boîte *est* le centre de l'immeuble.
+       Cadrée sur l'origine, elle laissait soixante unités de vide au-dessus de
+       l'écusson, et le dessin tombait d'autant sous sa cible. */
     <svg
-      viewBox="0 0 360 620"
+      viewBox={VUE}
       className={className}
       role="img"
-      aria-label={titre ?? 'Dessin à l’encre d’une tour Barnes en cours de construction'}
-      preserveAspectRatio="xMidYMax meet"
+      aria-label={titre ?? 'Dessin à l’encre d’un immeuble en cours de construction'}
+      // Centré dans son cadre, et non plus calé en bas : le dessin est
+      // désormais posé en fond d'écran, centré sur le titre, et c'est sa masse
+      // qui doit l'être — un ancrage bas le ferait glisser vers le pied de la
+      // page dès que le cadre change de proportions.
+      preserveAspectRatio="xMidYMid meet"
     >
-      {/* La ligne d'horizon, posée avant tout le reste : c'est le sol d'où la
-          tour sort. Volontairement pas droite, et prolongée bien au-delà de la
-          largeur du bâtiment — un sol qui s'arrête aux murs n'est pas un sol. */}
+      {/* La ligne d'horizon, posée avant tout le reste : c'est le sol d'où le
+          bâtiment sort. Volontairement pas droite, et prolongée bien au-delà de
+          sa largeur — un sol qui s'arrête aux murs n'est pas un sol. */}
       <Trait
-        d={`M 6 ${SOL + 6} C 100 ${SOL + 4}, 220 ${SOL + 9}, 354 ${SOL + 5}`}
+        d={`M 10 ${SOL + 6} C 104 ${SOL + 4}, 224 ${SOL + 9}, 350 ${SOL + 5}`}
         duree={0.9}
         retard={0.1}
         largeur={1.3}
         opacite={0.4}
       />
 
-      {BANDES.slice(0, bandes).map((bande, index) => (
+      {BANDES.map((bande, index) => (
         <Bande
           key={bande.bas}
           bande={bande}
           index={index}
           demiPrecedent={index === 0 ? bande.demi : BANDES[index - 1].demi}
-          // En régime piloté, chaque bande naît à son tour : elle est montée au
-          // moment où l'avancement l'atteint, et son tracé part aussitôt. Le
-          // retard n'a donc à échelonner que le régime autonome.
-          retard={autonome ? RETARD_INITIAL_S + index * PAS_S : 0}
-          actif={autonome}
+          retard={RETARD_INITIAL_S + index * PAS_S}
         />
       ))}
 
-      {/* L'écusson au sommet — la tour devient la Tour Barnes.
+      {/* L'écusson au-dessus du toit — le bâtiment devient l'Immeuble Barnes.
           L'échelle est portée par l'image, l'animation par le groupe :
-          `pose-encre` écrit elle-même un `transform`, et les deux
-          s'écraseraient sur un même nœud. */}
-      {achevee ? (
-        <g className="pose-encre" style={{ '--retard': `${retardEcusson}s`, '--duree': '0.8s' }}>
-          <image href={LOGO_BARNES_SRC} x={AXE - 30} y="0" width="60" height="60" />
-        </g>
-      ) : null}
+          `pose-encre` écrit elle-même un `transform`, et les deux s'écraseraient
+          sur un même nœud. */}
+      <g className="pose-encre" style={{ '--retard': `${RETARD_ECUSSON_S}s`, '--duree': '0.8s' }}>
+        <image href={LOGO_BARNES_SRC} x={AXE - 31} y="76" width="62" height="62" />
+      </g>
     </svg>
   )
 }

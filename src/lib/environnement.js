@@ -1,4 +1,6 @@
-// Environnement du bien — le bloc « cadre » de la page caractéristiques.
+// Environnement du bien — la moitié « nuisances et agréments » du bloc
+// « Environnement » du rapport. L'autre moitié — vue, exposition, luminosité —
+// est déduite par `cadre.js`.
 //
 // Ce que l'agent déclare décrit le bien ; ce module décrit ce qu'il y a autour,
 // et que personne n'a à saisir parce que les référentiels le savent déjà : une
@@ -30,12 +32,12 @@
 // déduisent d'une distance mesurée : ce sont des faits, et ils descendent au
 // rapport comme tels.
 //
-// La vue, l'exposition et la luminosité, non. Aucune base ne les publie, et
-// elles ne se devinent pas d'une emprise au sol — un troisième étage plein sud
-// peut être sombre parce que l'immeuble d'en face est plus haut. Elles sont
-// donc demandées à l'agent, qui a visité (voir `EstimationCharacteristicsStep`),
-// et ce module ne fait que les compléter : « Dégagée » déclaré devient
-// « Dégagée, mer » quand le trait de côte est à trois cents mètres.
+// La vue, l'exposition et la luminosité ne sont pas ici, et ce module n'y
+// touche pas : aucune base ne les publie, et c'est un second module — `cadre.js`
+// — qui les déduit de l'emprise du bâtiment, de celles de ses voisins et du
+// relief. Les deux relevés se rejoignent au rapport, où l'un complète l'autre :
+// la « Dégagée » calculée par `cadre.js` devient « Dégagée, mer » quand le trait
+// de côte relevé ici est à moins de quatre cents mètres.
 //
 // Ne lève jamais : chaque question a son repli à `null`, et un champ non déduit
 // s'affiche « Non renseigné » au rapport, où il reste modifiable comme le reste.
@@ -139,9 +141,10 @@ const present = (valeur) => typeof valeur === 'number' && valeur > 0
  * Niveau sonore présumé du secteur, et la raison qui le fonde.
  *
  * Le motif compte autant que le niveau : « Passant » sans explication est un
- * jugement, « Passant — axe routier structurant à moins de 150 m » est un
- * constat que l'agent peut confirmer ou corriger sur place. Les deux
- * descendent au rapport.
+ * jugement, « axe routier structurant à moins de 150 m » est un constat que
+ * l'agent peut confirmer ou corriger sur place. Les deux descendent au rapport,
+ * où le motif rejoint ceux de `cadre.js` sous le bloc « Environnement » — d'où
+ * le préfixe « Bruit : », qui dit de quelle ligne il justifie la valeur.
  *
  * Un référentiel muet ne rend pas « Calme » : il rend `null`. Déduire le calme
  * d'une panne de réseau serait la pire des réponses — c'est le champ que
@@ -154,24 +157,27 @@ function niveauSonore(reponses) {
   if (!connu) return { niveau: null, motif: null }
 
   if (present(reponses.autoroute)) {
-    return { niveau: 'Exposé', motif: 'Voie rapide ou route à deux chaussées à moins de 300 m.' }
+    return {
+      niveau: 'Exposé',
+      motif: 'Bruit : voie rapide ou route à deux chaussées à moins de 300 m.',
+    }
   }
   if (present(reponses.railProche)) {
-    return { niveau: 'Exposé', motif: 'Voie ferrée à moins de 200 m.' }
+    return { niveau: 'Exposé', motif: 'Bruit : voie ferrée à moins de 200 m.' }
   }
   if (present(reponses.routeMajeureProche)) {
-    return { niveau: 'Passant', motif: 'Axe routier structurant à moins de 150 m.' }
+    return { niveau: 'Passant', motif: 'Bruit : axe routier structurant à moins de 150 m.' }
   }
   if (present(reponses.routeMajeure)) {
-    return { niveau: 'Modéré', motif: 'Axe routier structurant entre 150 et 400 m.' }
+    return { niveau: 'Modéré', motif: 'Bruit : axe routier structurant entre 150 et 400 m.' }
   }
   if (present(reponses.rail)) {
-    return { niveau: 'Modéré', motif: 'Voie ferrée entre 200 et 600 m.' }
+    return { niveau: 'Modéré', motif: 'Bruit : voie ferrée entre 200 et 600 m.' }
   }
 
   return {
     niveau: 'Calme',
-    motif: 'Ni voie rapide, ni axe structurant, ni voie ferrée dans le voisinage.',
+    motif: 'Bruit : ni voie rapide, ni axe structurant, ni voie ferrée à proximité.',
   }
 }
 
@@ -226,7 +232,12 @@ export async function fetchEnvironnement({ lat, lon }, { signal } = {}) {
     sonore: niveauSonore(reponses),
     littoral: littoral(reponses),
     espacesVerts: espacesVerts(reponses),
-    source: '© IGN — BD TOPO® (Géoplateforme)',
+    // Les jeux de données mobilisés, et non la mention d'attribution toute
+    // faite : le rapport réunit ce relevé et celui de `cadre.js` sous une seule
+    // ligne de provenance, et deux phrases complètes s'y juxtaposeraient en se
+    // répétant (« © IGN — BD TOPO® … · © IGN — BD TOPO® et RGE ALTI® … »).
+    // Voir `environnement` dans `rapportModele.js`, qui compose la mention.
+    sources: ['BD TOPO®'],
   }
 }
 

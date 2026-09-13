@@ -131,8 +131,13 @@ const MAX_PAR_CATEGORIE = 3
  *
  * Les points sans nom y figurent, contrairement à la liste : sur une carte, un
  * arrêt de bus anonyme est un arrêt de bus tout de même.
+ *
+ * Relevé de quarante à soixante avec l'élargissement des filtres : c'est la
+ * densité, précisément, que cette carte doit montrer, et un plafond hérité d'un
+ * relevé plus étroit ferait d'un centre-ville et d'un lotissement deux cartes
+ * également remplies.
  */
-const MAX_POINTS_CARTE = 40
+const MAX_POINTS_CARTE = 60
 
 // Aucun en-tête d'identification n'est posé ici, et ce n'est pas un oubli.
 // `User-Agent` figure parmi les en-têtes interdits à `fetch` dans un
@@ -166,11 +171,19 @@ const CATEGORIES = [
   {
     id: 'ecoles',
     label: 'Écoles',
+    // `school` couvre en France de la maternelle au lycée ; les trois autres
+    // valeurs sont celles qui lui échappent, et qu'un relevé qui s'arrêtait à
+    // `school|kindergarten` laissait de côté — un collège cartographié en
+    // `college` (l'usage anglo-saxon du terme est répandu sur les
+    // établissements privés), une université, un établissement de formation.
     overpass: {
-      filtres: ['["amenity"~"^(school|kindergarten)$"]'],
-      retenir: (tags) => tags.amenity === 'school' || tags.amenity === 'kindergarten',
+      filtres: ['["amenity"~"^(school|kindergarten|college|university)$"]'],
+      retenir: (tags) =>
+        ['school', 'kindergarten', 'college', 'university'].includes(tags.amenity),
     },
-    photon: { tags: ['amenity:school', 'amenity:kindergarten'] },
+    photon: {
+      tags: ['amenity:school', 'amenity:kindergarten', 'amenity:college', 'amenity:university'],
+    },
     bdtopo: { couche: 'zone_d_activite_ou_d_interet', categories: ['Science et enseignement'] },
     // Les niveaux sont distingués à l'affichage : une maternelle et un lycée
     // ne pèsent pas de la même façon dans le choix d'une famille.
@@ -179,9 +192,10 @@ const CATEGORIES = [
     // renseigné que sur une minorité d'établissements.
     detail: (tags) => {
       const nom = tags.name ?? ''
-      if (tags.amenity === 'kindergarten' || /maternelle/i.test(nom)) return 'Maternelle'
+      if (tags.amenity === 'university') return 'Université'
+      if (tags.amenity === 'kindergarten' || /maternelle|crèche/i.test(nom)) return 'Maternelle'
       if (/lycée/i.test(nom)) return 'Lycée'
-      if (/collège/i.test(nom)) return 'Collège'
+      if (tags.amenity === 'college' || /collège/i.test(nom)) return 'Collège'
       if (tags['isced:level']?.startsWith('1') || /élémentaire|primaire/i.test(nom)) {
         return 'Élémentaire'
       }
@@ -191,12 +205,38 @@ const CATEGORIES = [
   {
     id: 'commerces',
     label: 'Commerces',
+    // ── La liste fermée est devenue une clause ouverte ─────────────────
+    //
+    // Sept valeurs de `shop` étaient retenues : supermarché, supérette,
+    // boulangerie, boucherie, primeur, centre commercial, grand magasin. Le
+    // relevé manquait donc tout le reste de ce qui fait qu'un quartier a des
+    // commerces — la pharmacie, le tabac-presse, le coiffeur, l'opticien, le
+    // fleuriste, la banque, le bureau de poste, le café du coin. Un centre-ville
+    // ordinaire rendait quatre pastilles là où il en compte quarante, et c'est
+    // ce décompte que le vendeur lit sur son rapport.
+    //
+    // `["shop"]` sans valeur retient **toute** boutique, quelle qu'elle soit, et
+    // la liste d'`amenity` qui suit ajoute les services de proximité que
+    // l'étiquetage OSM ne range pas sous `shop` : ils portent la même enseigne
+    // sur la même rue, et un acquéreur ne fait pas la différence.
+    //
+    // Le plafond de la carte (`MAX_POINTS_CARTE`) borne ce que la figure peut
+    // montrer ; le décompte, lui, n'est pas plafonné — « 63 commerces à moins de
+    // 500 m » est l'information juste, et elle vaut mieux que sept.
     overpass: {
       filtres: [
-        '["shop"~"^(supermarket|convenience|bakery|butcher|greengrocer|mall|department_store)$"]',
+        '["shop"]',
+        '["amenity"~"^(pharmacy|marketplace|post_office|bank|restaurant|cafe|bar|fast_food|fuel)$"]',
       ],
-      retenir: (tags) => Boolean(tags.shop),
+      retenir: (tags) =>
+        Boolean(tags.shop) ||
+        ['pharmacy', 'marketplace', 'post_office', 'bank', 'restaurant', 'cafe', 'bar',
+          'fast_food', 'fuel'].includes(tags.amenity),
     },
+    // Photon n'accepte pas de filtre sur une clé nue : chaque valeur doit être
+    // nommée. On reprend donc les enseignes du quotidien, celles qui pèsent
+    // dans le choix d'un quartier — c'est une source de repli, elle n'a pas à
+    // égaler Overpass, seulement à ne pas rendre une carte vide.
     photon: {
       tags: [
         'shop:supermarket',
@@ -206,6 +246,19 @@ const CATEGORIES = [
         'shop:greengrocer',
         'shop:mall',
         'shop:department_store',
+        'shop:hairdresser',
+        'shop:clothes',
+        'shop:optician',
+        'shop:florist',
+        'shop:newsagent',
+        'shop:tobacco',
+        'amenity:pharmacy',
+        'amenity:marketplace',
+        'amenity:post_office',
+        'amenity:bank',
+        'amenity:restaurant',
+        'amenity:cafe',
+        'amenity:bakery',
       ],
     },
     // La BD TOPO® ne recense pas le commerce de détail — la catégorie
@@ -245,7 +298,31 @@ const CATEGORIES = [
         greengrocer: 'Primeur',
         mall: 'Centre commercial',
         department_store: 'Grand magasin',
-      })[tags.shop] ?? 'Commerce',
+        hairdresser: 'Coiffeur',
+        optician: 'Opticien',
+        florist: 'Fleuriste',
+        newsagent: 'Presse',
+        tobacco: 'Tabac',
+        clothes: 'Prêt-à-porter',
+        chemist: 'Droguerie',
+        hardware: 'Quincaillerie',
+        seafood: 'Poissonnerie',
+        cheese: 'Fromagerie',
+        wine: 'Caviste',
+        alcohol: 'Caviste',
+      })[tags.shop] ??
+      ({
+        pharmacy: 'Pharmacie',
+        marketplace: 'Marché',
+        post_office: 'Bureau de poste',
+        bank: 'Banque',
+        restaurant: 'Restaurant',
+        cafe: 'Café',
+        bar: 'Bar',
+        fast_food: 'Restauration rapide',
+        fuel: 'Station-service',
+      })[tags.amenity] ??
+      (tags.shop ? 'Commerce' : 'Service de proximité'),
   },
   {
     id: 'transports',
@@ -253,21 +330,32 @@ const CATEGORIES = [
     overpass: {
       filtres: [
         '["highway"="bus_stop"]',
-        '["railway"~"^(tram_stop|station|subway_entrance)$"]',
+        '["railway"~"^(tram_stop|station|halt|subway_entrance)$"]',
         '["public_transport"="station"]',
+        '["amenity"~"^(bus_station|ferry_terminal)$"]',
       ],
+      // `public_transport=platform` n'est délibérément pas retenu, alors qu'il
+      // désigne bien un point d'arrêt : OpenStreetMap cartographie un même
+      // arrêt de bus à la fois par un nœud `highway=bus_stop` et par le quai
+      // qui le porte. Les deux remonteraient, sous des libellés différents —
+      // donc sans que le dédoublonnage par nom et nature les rapproche —, et la
+      // desserte du quartier serait comptée deux fois.
       retenir: (tags) =>
         tags.highway === 'bus_stop' ||
-        ['tram_stop', 'station', 'subway_entrance'].includes(tags.railway) ||
-        tags.public_transport === 'station',
+        ['tram_stop', 'station', 'halt', 'subway_entrance'].includes(tags.railway) ||
+        tags.public_transport === 'station' ||
+        ['bus_station', 'ferry_terminal'].includes(tags.amenity),
     },
     photon: {
       tags: [
         'highway:bus_stop',
         'railway:station',
+        'railway:halt',
         'railway:tram_stop',
         'railway:subway_entrance',
         'public_transport:station',
+        'amenity:bus_station',
+        'amenity:ferry_terminal',
       ],
     },
     // La BD TOPO® ignore les arrêts de bus, mais pas les gares, les stations de
@@ -295,11 +383,17 @@ const CATEGORIES = [
     detail: (tags) =>
       tags.highway === 'bus_stop'
         ? 'Arrêt de bus'
-        : tags.railway === 'tram_stop'
-          ? 'Tramway'
-          : tags.railway === 'subway_entrance'
-            ? 'Métro'
-            : 'Gare',
+        : tags.amenity === 'bus_station'
+          ? 'Gare routière'
+          : tags.amenity === 'ferry_terminal'
+            ? 'Embarcadère'
+            : tags.railway === 'tram_stop'
+              ? 'Tramway'
+              : tags.railway === 'subway_entrance'
+                ? 'Métro'
+                : tags.railway === 'halt'
+                  ? 'Halte ferroviaire'
+                  : 'Gare',
   },
 ]
 
@@ -330,7 +424,12 @@ function overpassQuery(lat, lon, rayonM) {
     categorie.overpass.filtres.map((filtre) => `nwr${filtre}${autour};`),
   )
 
-  return `[out:json][timeout:${OVERPASS_TIMEOUT_S}];(${clauses.join('')});out center tags 300;`
+  // Le plafond de la requête. Il était de 300 objets pour les trois catégories
+  // réunies, ce qui suffisait à une liste fermée de sept enseignes ; la clause
+  // ouverte sur `shop` l'épuise dans n'importe quel centre-ville, et un plafond
+  // atteint tronque le relevé sans le dire. Huit cents laisse la marge, pour une
+  // réponse qui reste sous le mégaoctet.
+  return `[out:json][timeout:${OVERPASS_TIMEOUT_S}];(${clauses.join('')});out center tags 800;`
 }
 
 /** Coordonnées d'un élément Overpass — nœud direct, ou centre d'une emprise. */
