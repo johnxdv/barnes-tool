@@ -3,8 +3,8 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, Lightbulb, Loader2 } from 'lucide-react'
 import { ANALYSIS_STEPS, DID_YOU_KNOW } from '../../data/estimation'
 import { EASE } from '../../lib/motion'
+import { TamponBarnes } from '../ui/LogoBarnes'
 import { SceneEncre } from './SceneEncre'
-import { SceneLaterale } from './ScenesLaterales'
 
 const TOTAL_MS = ANALYSIS_STEPS.reduce((sum, step) => sum + step.durationMs, 0)
 
@@ -209,26 +209,20 @@ export function EstimationLoadingStep({ onDone, onProgress }) {
         </span>
       </motion.aside>
 
-      {/* La vignette latérale — une scène tirée au sort parmi six, dessinée
-          en une dizaine de secondes.
+      {/* Le cachet Barnes, apposé au flanc bas du module — six secondes de
+          tracé sur les douze que dure l'analyse (voir `TamponBarnes`).
 
-          Elle couvre exactement le creux de l'attente : la planche du haut
-          est achevée à six secondes, l'analyse en dure douze, et celle-ci
-          n'est terminée qu'à la fin. `key` n'est pas posée : le tirage vit
-          dans l'état de la vignette, et un remontage à chaque rendu ferait
-          recommencer le dessin toutes les quatre secondes, au rythme de la
-          rotation de l'encart « Le saviez-vous ».
+          Il remplace la vignette à l'encre qui tenait cette place : une scène
+          de seize rem sur toute la hauteur de la fenêtre pesait autant que le
+          module qu'elle accompagnait, et c'est le module qu'on doit lire.
 
-          Posée en absolu au flanc du module, elle ne pèse pas sur son
-          centrage — voir le commentaire de tête.
-
-          `aria-hidden` : la scène est un ornement d'attente, et ce qui se
-          passe réellement est annoncé à côté, en `aria-live`. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-full top-1/2 hidden -translate-y-1/2 pl-14 xl:block"
-      >
-        <SceneLaterale className="h-[72vh] max-h-[34rem] w-64" />
+          Petit et aligné en bas, il ne rivalise avec rien : il signe le coin
+          de l'écran pendant que l'analyse avance au milieu. Il reste posé en
+          absolu au flanc du module et ne pèse donc pas sur son centrage — voir
+          le commentaire de tête —, et ne paraît qu'à partir de 1280 px, comme
+          la vignette avant lui. */}
+      <div className="pointer-events-none absolute bottom-0 left-full hidden pl-12 xl:block">
+        <TamponBarnes className="h-32 w-32" />
       </div>
     </div>
   )
