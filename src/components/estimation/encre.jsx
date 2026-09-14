@@ -1,15 +1,16 @@
 /**
  * Le pinceau — brique commune à tous les dessins à l'encre du parcours.
  *
- * Trois scènes s'en servent : la demeure de l'écran d'adresse (`MaisonEncre`),
- * la planche de l'écran d'analyse (`SceneEncre`) et les vignettes qui
- * l'accompagnent (`ScenesLaterales`). Chacune définissait son propre `Trait`,
- * au mot près ; la troisième a rendu la copie insoutenable.
+ * Quatre scènes s'en servent : la demeure de l'écran d'adresse (`MaisonEncre`),
+ * la planche de l'écran d'analyse (`SceneEncre`), les vignettes qui
+ * l'accompagnent (`ScenesLaterales`) et les dix planches de l'écran
+ * d'assemblage (`ScenesProvence`). Chacune définissait son propre `Trait`, au
+ * mot près ; la troisième a rendu la copie insoutenable.
  *
- * Les planches peintes de l'écran d'assemblage, elles, ont leur propre boîte à
- * outils (`gouache.jsx`) : le trait d'encre et la masse de couleur sont deux
- * gestes, et les mêler dans un même fichier n'aurait simplifié ni l'un ni
- * l'autre.
+ * Les planches d'assemblage ont un temps fait exception, avec leur propre boîte
+ * à outils de masses de couleur. Elles sont revenues au trait : une scène qui se
+ * remplit de couleur ne se lit pas comme le reste du parcours, elle se lit comme
+ * une image qu'on y aurait collée.
  *
  * Le principe est celui du sumi-e : rien n'apparaît, tout se trace. `.trace-encre`
  * (voir `index.css`) masque la longueur du tracé puis la libère, si bien que le

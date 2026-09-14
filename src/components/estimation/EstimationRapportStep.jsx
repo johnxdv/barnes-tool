@@ -22,13 +22,12 @@ import { ACTE_MS, DuoProvence } from './ScenesProvence'
  * seulement une durée plancher (`PLANCHER_MS`) pour qu'un assemblage servi
  * depuis le cache ne le fasse pas clignoter.
  *
- * ── Les deux planches peintes ─────────────────────────────────────────────
+ * ── Les deux planches dessinées ───────────────────────────────────────────
  *
- * De part et d'autre du module, deux scènes à la gouache se peignent l'une après
- * l'autre — cinq secondes chacune, la première depuis le bord gauche de
- * l'écran, la seconde depuis le bord droit (voir `ScenesProvence`). Elles sont
- * tirées au sort dans un lot de dix, et ne sont jamais les mêmes deux fois de
- * suite dans le même rapport.
+ * De part et d'autre du module, deux scènes à l'encre se tracent l'une après
+ * l'autre — cinq secondes chacune, la première à gauche, la seconde à droite
+ * (voir `ScenesProvence`). Elles sont tirées au sort dans un lot de dix, et ne
+ * sont jamais les mêmes deux fois de suite dans le même rapport.
  *
  * C'est ce diptyque qui fixe la durée plancher de l'écran : dix secondes, soit
  * les deux actes. En deçà, la planche de droite ne serait à peu près jamais vue
@@ -46,7 +45,7 @@ const ETAPES = [
 /**
  * Cadence d'affichage des étapes.
  *
- * Elle suit maintenant celle des planches peintes : trois étapes à 2,8 s
+ * Elle suit maintenant celle des planches dessinées : trois étapes à 2,8 s
  * couvrent huit secondes des dix que dure l'écran. À l'ancienne cadence
  * (1,1 s), la liste était entièrement cochée au bout de deux secondes et
  * l'écran passait les huit suivantes à ne plus rien annoncer.
@@ -54,7 +53,7 @@ const ETAPES = [
 const ETAPE_MS = 2800
 
 /**
- * Durée minimale de l'écran — les deux actes du diptyque peint, bout à bout
+ * Durée minimale de l'écran — les deux actes du diptyque dessiné, bout à bout
  * (voir l'en-tête). L'écran ne s'efface qu'une fois le rapport là *et* ce
  * plancher atteint, jamais avant l'un ou l'autre.
  */
@@ -186,10 +185,11 @@ export function EstimationRapportStep({ pret, onDone }) {
 
   return (
     <div className="relative z-10 w-full max-w-md text-center">
-      {/* Les deux planches peintes, fixées aux bords de la fenêtre. Elles sont
-          posées avant le module et en `z-0` : le titre et la liste d'étapes
-          passent devant, ce qui est l'ordre qui compte — on peut ne pas voir
-          les planches, on ne peut pas ne pas lire l'avancement. */}
+      {/* Les deux planches dessinées, centrées dans la bande libre de chaque
+          côté du module. Elles sont posées avant lui et en `z-0` : le titre et
+          la liste d'étapes passent devant, ce qui est l'ordre qui compte — on
+          peut ne pas voir les planches, on ne peut pas ne pas lire
+          l'avancement. */}
       <DuoProvence />
 
       <AssemblageBarnes etape={etape} reduce={reduce} />
