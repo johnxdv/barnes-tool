@@ -57,7 +57,15 @@ function FieldCard({ label, value, filled, onReset, illustration, illustrationHe
     // `group/carte` est nommé plutôt qu'anonyme : les contrôles de cette carte
     // vivent déjà dans d'autres groupes, et un `group` sans nom se ferait
     // capturer par le plus proche.
-    <div className="group/carte rounded-xl border border-ink/10 bg-white px-4 py-3.5 shadow-[0_10px_28px_-22px_rgba(60,60,60,0.5)] transition-[transform,box-shadow,border-color] duration-300 ease-plan hover:-translate-y-0.5 hover:border-[color:var(--accent)] hover:shadow-[0_18px_36px_-24px_rgba(60,60,60,0.75)] focus-within:-translate-y-0.5 focus-within:border-[color:var(--accent)] focus-within:shadow-[0_18px_36px_-24px_rgba(60,60,60,0.75)]">
+    //
+    // La carte a été resserrée d'un demi-cran — `py-3` au lieu de `py-3.5`, et
+    // les dessins d'un demi-rem de moins (voir les `illustrationHeight` par
+    // défaut plus bas). Quatorze pixels par carte, seize cartes : le formulaire
+    // descend de deux cents pixels de moins sans qu'aucune carte paraisse
+    // tassée. C'est un réglage de parcours, pas de mise en page — l'écran est
+    // le plus long du tunnel, et ce qu'on gagne ici est du défilement en moins
+    // avant le bouton de validation.
+    <div className="group/carte rounded-xl border border-ink/10 bg-white px-4 py-3 shadow-[0_10px_28px_-22px_rgba(60,60,60,0.5)] transition-[transform,box-shadow,border-color] duration-300 ease-plan hover:-translate-y-0.5 hover:border-[color:var(--accent)] hover:shadow-[0_18px_36px_-24px_rgba(60,60,60,0.75)] focus-within:-translate-y-0.5 focus-within:border-[color:var(--accent)] focus-within:shadow-[0_18px_36px_-24px_rgba(60,60,60,0.75)]">
       <div className="flex items-baseline justify-between gap-3">
         <span className="font-mono text-[0.58rem] uppercase tracking-micro text-ink/50 transition-colors duration-300 ease-plan group-hover/carte:text-[color:var(--accent)] group-focus-within/carte:text-[color:var(--accent)]">
           {label}
@@ -178,7 +186,7 @@ export function SliderField({
   minLabel,
   maxLabel,
   illustration,
-  illustrationHeight = 'mt-2 h-[4.75rem]',
+  illustrationHeight = 'mt-1.5 h-[4.25rem]',
 }) {
   const id = useId()
   const filled = value !== null && value !== undefined
@@ -275,7 +283,7 @@ export function NumberField({
   placeholder,
   hint,
   illustration,
-  illustrationHeight = 'mt-2 h-[4.75rem]',
+  illustrationHeight = 'mt-1.5 h-[4.25rem]',
 }) {
   const id = useId()
   const filled = value !== null && value !== undefined
@@ -368,7 +376,7 @@ export function StepperField({
   format,
   allowCustom = false,
   illustration,
-  illustrationHeight = 'mt-2 h-14',
+  illustrationHeight = 'mt-1.5 h-[3.25rem]',
 }) {
   const filled = value !== null && value !== undefined
 
@@ -788,7 +796,7 @@ export function ToggleField({ label, value, onChange, illustration }) {
       filled={filled}
       onReset={() => onChange(null)}
       illustration={illustration}
-      illustrationHeight="mt-2 h-14"
+      illustrationHeight="mt-1.5 h-[3.25rem]"
     >
       <div className="mt-2 flex items-center justify-center gap-3">
         <span

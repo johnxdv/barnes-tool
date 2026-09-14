@@ -153,28 +153,35 @@ export function BuildingMap({ lat, lon, addressLabel, selection, onSelect }) {
       keyboard: false,
       icon: L.divIcon({
         className: '',
+        // Toutes les cotes ci-dessous sont celles d'origine augmentées de 30 %
+        // — écusson, tige, point de contact, et le cadre qui les tient. Le
+        // repère était juste : il manquait de présence sur une photographie
+        // aérienne très texturée, où trente-quatre pixels d'écusson se lisent
+        // de près mais ne sautent pas aux yeux. L'échelle est le seul réglage
+        // qui change ; les proportions internes du repère, elles, sont
+        // conservées au dixième près.
         html:
-          '<span style="display:block;position:relative;width:34px;height:44px">' +
+          '<span style="display:block;position:relative;width:44px;height:57px">' +
             // La tige. Un dégradé plutôt qu'un aplat : elle s'efface vers la
             // pointe et paraît se poser sur le sol au lieu de s'y planter.
-            '<span style="position:absolute;left:16px;bottom:0;width:2px;height:13px;' +
+            '<span style="position:absolute;left:20.7px;bottom:0;width:2.6px;height:17px;' +
               'background:linear-gradient(to bottom,#B4002F,rgba(180,0,47,0.35));' +
               'box-shadow:0 0 0 1px rgba(255,255,255,0.75)"></span>' +
             // Le point de contact, à la pointe : sans lui, la tige s'arrête
             // dans le vide et l'œil ne sait pas ce qu'elle désigne.
-            '<span style="position:absolute;left:14.5px;bottom:-2px;width:5px;height:5px;' +
+            '<span style="position:absolute;left:18.75px;bottom:-2.6px;width:6.5px;height:6.5px;' +
               'border-radius:9999px;background:#B4002F;' +
-              'box-shadow:0 0 0 1.5px rgba(255,255,255,0.9)"></span>' +
+              'box-shadow:0 0 0 1.8px rgba(255,255,255,0.9)"></span>' +
             // L'écusson, sur pastille claire : le fichier de marque est un SVG
             // à fond transparent, et sur une photographie aérienne sombre son
             // rouge disparaîtrait.
-            `<img src="${LOGO_BARNES_SRC}" alt="" width="34" height="34" ` +
-              'style="position:absolute;left:0;top:0;width:34px;height:34px;' +
-              'border-radius:9999px;background:rgba(255,255,255,0.92);padding:2px;' +
-              'box-shadow:0 1px 6px rgba(60,60,60,0.45)">' +
+            `<img src="${LOGO_BARNES_SRC}" alt="" width="44" height="44" ` +
+              'style="position:absolute;left:0;top:0;width:44px;height:44px;' +
+              'border-radius:9999px;background:rgba(255,255,255,0.92);padding:2.6px;' +
+              'box-shadow:0 1px 8px rgba(60,60,60,0.45)">' +
           '</span>',
-        iconSize: [34, 44],
-        iconAnchor: [17, 44],
+        iconSize: [44, 57],
+        iconAnchor: [22, 57],
       }),
     }).addTo(map)
 

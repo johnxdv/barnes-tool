@@ -356,7 +356,7 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
                 onChange={set('etage')}
                 max={PLAFONDS.etage}
                 format={etageLabel}
-                illustrationHeight="mt-2 h-[4.5rem]"
+                illustrationHeight="mt-1.5 h-[4rem]"
                 illustration={(niveau) => <EtageIllustration value={niveau} />}
               />
             ) : null}
@@ -370,7 +370,7 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
               format={surfaceLabel(BORNES.surfaceHabitable.max)}
               minLabel="10 m²"
               maxLabel="800+ m²"
-              illustrationHeight="mt-1 h-[5.25rem]"
+              illustrationHeight="mt-1 h-[4.75rem]"
               illustration={(surface) => (
                 <HouseIllustration surfaceM2={surface} className="h-full w-full" />
               )}
@@ -411,7 +411,7 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
               onChange={set('nombrePieces')}
               max={PLAFONDS.nombrePieces}
               allowCustom
-              illustrationHeight="mt-2 h-16"
+              illustrationHeight="mt-1.5 h-[3.75rem]"
               illustration={(count) => (
                 <PiecesIllustration count={count} max={PLAFONDS.nombrePieces} />
               )}
@@ -442,7 +442,7 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
               value={values.nombreSallesEau}
               onChange={set('nombreSallesEau')}
               max={PLAFONDS.nombreSallesEau}
-              illustrationHeight="mt-2 h-16"
+              illustrationHeight="mt-1.5 h-[3.75rem]"
               illustration={(count) => <SalleEauIllustration count={count} />}
             />
 
@@ -481,7 +481,7 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
               {...ANNEE}
               placeholder="AAAA"
               hint="1800 – 2026"
-              illustrationHeight="mt-1 h-[5.25rem]"
+              illustrationHeight="mt-1 h-[4.75rem]"
               illustration={(annee) => <EpoqueIllustration value={annee} />}
             />
 
@@ -491,7 +491,7 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
               value={values.nombreNiveaux}
               onChange={set('nombreNiveaux')}
               max={PLAFONDS.nombreNiveaux}
-              illustrationHeight="mt-2 h-[4.5rem]"
+              illustrationHeight="mt-1.5 h-[4rem]"
               illustration={(count) => <NiveauxIllustration count={count} />}
             />
 
@@ -625,7 +625,7 @@ function Colonne({ colonne, delai, children }) {
           `null`, que `map` traverse quand même — on emballerait du vide dans un
           `div` que l'espacement écarterait des autres, et la colonne garderait
           le trou d'un champ qu'elle n'affiche pas. */}
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {Children.toArray(children).map((child, index) => (
           <div
             key={child.key}

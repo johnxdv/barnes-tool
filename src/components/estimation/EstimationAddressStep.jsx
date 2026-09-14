@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Check } from 'lucide-react'
 import { AddressAutocomplete } from './AddressAutocomplete'
 import { LogoBarnes } from '../ui/LogoBarnes'
-import { TourEncre } from './TourEncre'
+import { MaisonEncre } from './MaisonEncre'
 
 /**
  * Délai entre le choix dans la liste et le passage à la carte. Assez court pour
@@ -34,9 +34,9 @@ export function EstimationAddressStep({ onBack, onConfirm }) {
   }, [address, mappable, onConfirm])
 
   return (
-    /* Une seule colonne, centrée, et l'immeuble derrière elle.
+    /* Une seule colonne, centrée, et la demeure derrière elle.
 
-       Il tenait auparavant une seconde colonne, à droite de la saisie : deux
+       Le dessin tenait auparavant une seconde colonne, à droite de la saisie : deux
        sujets de poids visuel comparable, côte à côte, qui se disputaient le
        regard sur un écran dont la seule fonction est de faire taper une
        adresse. Il est maintenant posé en fond, centré sur le titre et très peu
@@ -67,34 +67,35 @@ export function EstimationAddressStep({ onBack, onConfirm }) {
           finissent à `translateY(0)`. */}
       <LogoBarnes mouvement="saut" arrivee className="relative z-10 mx-auto mb-6 h-16 w-16" />
 
-      {/* Le titre, et l'immeuble centré dessus.
+      {/* Le titre, et la demeure centrée dessus.
 
           Le décor est ancré sur la boîte du titre, et sur elle seule : c'est
-          « Où se situe le bien ? » qui doit se trouver au milieu de l'immeuble.
+          « Où se situe le bien ? » qui doit se trouver au milieu de la maison.
           Ancré sur le bloc de tête entier — écusson, titre, consigne —, le
           dessin descendait d'une trentaine de pixels sous sa cible. */}
       <div className="relative">
-        {/* L'immeuble à l'encre, en fond.
+        {/* La demeure à l'encre, en fond.
 
-            Trois réglages, et ils tiennent ensemble : il est **centré sur le
+            Trois réglages, et ils tiennent ensemble : elle est **centrée sur le
             titre** (`inset-y-0` + `items-center`), **beaucoup plus pâle**
-            (`opacity-[0.09]`) et **plus grand** qu'avant (52 rem contre 44).
-            L'agrandissement est ce qui paie la baisse d'opacité : un décor très
-            pâle et petit ne se voit plus du tout ; très pâle et large, il donne
-            une texture à la page sans disputer le titre. Il déborde volontiers
-            la colonne (`-inset-x-[35%]`), sans quoi un immeuble de cette largeur
-            serait rogné aux épaules.
+            (`opacity-[0.09]`) et **large**. L'agrandissement est ce qui paie la
+            baisse d'opacité : un décor très pâle et petit ne se voit plus du
+            tout ; très pâle et large, il donne une texture à la page sans
+            disputer le titre. Il déborde volontiers la colonne
+            (`-inset-x-[42%]`), sans quoi une maison à deux ailes serait rognée
+            aux épaules — le dessin est plus large que ne l'était l'immeuble
+            qu'il remplace, et le débord a suivi.
 
             `pointer-events-none` : il passe sous le champ de saisie, qui reste
             cliquable sur toute sa surface.
 
             `aria-hidden` : ce que cet écran demande est écrit par-dessus, et un
-            lecteur d'écran n'a rien à faire d'un dessin d'immeuble. */}
+            lecteur d'écran n'a rien à faire d'un dessin de maison. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -inset-x-[35%] inset-y-0 hidden items-center justify-center sm:flex"
+          className="pointer-events-none absolute -inset-x-[42%] inset-y-0 hidden items-center justify-center sm:flex"
         >
-          <TourEncre className="h-[88vh] max-h-[52rem] w-full opacity-[0.09]" />
+          <MaisonEncre className="h-[88vh] max-h-[52rem] w-full opacity-[0.09]" />
         </div>
 
         <h1 className="relative text-center font-display text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2.1rem]">

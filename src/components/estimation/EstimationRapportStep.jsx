@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { EASE } from '../../lib/motion'
 import { LOGO_BARNES_SRC } from '../ui/LogoBarnes'
+import { ACTE_MS, DuoProvence } from './ScenesProvence'
 
 /**
  * Écran d'assemblage — le temps que `api/rapport.js` réunisse les pages.
@@ -20,6 +21,20 @@ import { LOGO_BARNES_SRC } from '../ui/LogoBarnes'
  * l'écran attend le rapport même si ses lignes sont toutes cochées. Il impose
  * seulement une durée plancher (`PLANCHER_MS`) pour qu'un assemblage servi
  * depuis le cache ne le fasse pas clignoter.
+ *
+ * ── Les deux planches peintes ─────────────────────────────────────────────
+ *
+ * De part et d'autre du module, deux scènes à la gouache se peignent l'une après
+ * l'autre — cinq secondes chacune, la première depuis le bord gauche de
+ * l'écran, la seconde depuis le bord droit (voir `ScenesProvence`). Elles sont
+ * tirées au sort dans un lot de dix, et ne sont jamais les mêmes deux fois de
+ * suite dans le même rapport.
+ *
+ * C'est ce diptyque qui fixe la durée plancher de l'écran : dix secondes, soit
+ * les deux actes. En deçà, la planche de droite ne serait à peu près jamais vue
+ * — l'assemblage réel demande le plus souvent cinq à huit secondes, et l'écran
+ * s'effacerait au milieu du second acte. Le plancher n'ajoute donc presque
+ * jamais dix secondes d'attente : il ajoute ce qui manque aux dix.
  */
 
 const ETAPES = [
@@ -28,11 +43,22 @@ const ETAPES = [
   'Mise en page du rapport…',
 ]
 
-/** Cadence d'affichage des étapes. */
-const ETAPE_MS = 1100
+/**
+ * Cadence d'affichage des étapes.
+ *
+ * Elle suit maintenant celle des planches peintes : trois étapes à 2,8 s
+ * couvrent huit secondes des dix que dure l'écran. À l'ancienne cadence
+ * (1,1 s), la liste était entièrement cochée au bout de deux secondes et
+ * l'écran passait les huit suivantes à ne plus rien annoncer.
+ */
+const ETAPE_MS = 2800
 
-/** Durée minimale de l'écran — en deçà, il n'apparaîtrait qu'en un clin d'œil. */
-const PLANCHER_MS = 2600
+/**
+ * Durée minimale de l'écran — les deux actes du diptyque peint, bout à bout
+ * (voir l'en-tête). L'écran ne s'efface qu'une fois le rapport là *et* ce
+ * plancher atteint, jamais avant l'un ou l'autre.
+ */
+const PLANCHER_MS = ACTE_MS * 2
 
 /**
  * L'assemblage, en image — les feuilles du rapport qui viennent se ranger
@@ -159,7 +185,13 @@ export function EstimationRapportStep({ pret, onDone }) {
   }, [pret, plancherAtteint, onDone])
 
   return (
-    <div className="w-full max-w-md text-center">
+    <div className="relative z-10 w-full max-w-md text-center">
+      {/* Les deux planches peintes, fixées aux bords de la fenêtre. Elles sont
+          posées avant le module et en `z-0` : le titre et la liste d'étapes
+          passent devant, ce qui est l'ordre qui compte — on peut ne pas voir
+          les planches, on ne peut pas ne pas lire l'avancement. */}
+      <DuoProvence />
+
       <AssemblageBarnes etape={etape} reduce={reduce} />
 
       <h1 className="mt-7 font-display text-[1.7rem] font-semibold leading-tight text-ink sm:text-[2rem]">
