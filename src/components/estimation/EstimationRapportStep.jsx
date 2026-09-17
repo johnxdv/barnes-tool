@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { EASE } from '../../lib/motion'
 import { LOGO_BARNES_SRC } from '../ui/LogoBarnes'
-import { ACTE_MS, DuoProvence } from './ScenesProvence'
+import { ACTE_DROITE_MS, ACTE_GAUCHE_MS, DuoProvence } from './ScenesProvence'
 
 /**
  * Écran d'assemblage — le temps que `api/rapport.js` réunisse les pages.
@@ -25,15 +25,21 @@ import { ACTE_MS, DuoProvence } from './ScenesProvence'
  * ── Les deux planches dessinées ───────────────────────────────────────────
  *
  * De part et d'autre du module, deux scènes à l'encre se tracent l'une après
- * l'autre — cinq secondes chacune, la première à gauche, la seconde à droite
- * (voir `ScenesProvence`). Elles sont tirées au sort dans un lot de dix, et ne
- * sont jamais les mêmes deux fois de suite dans le même rapport.
+ * l'autre — sept secondes à gauche, huit à droite (voir `ScenesProvence`).
+ * Elles sont tirées au sort dans un lot de dix, et ne sont jamais les mêmes
+ * deux fois de suite dans le même rapport.
  *
- * C'est ce diptyque qui fixe la durée plancher de l'écran : dix secondes, soit
- * les deux actes. En deçà, la planche de droite ne serait à peu près jamais vue
- * — l'assemblage réel demande le plus souvent cinq à huit secondes, et l'écran
- * s'effacerait au milieu du second acte. Le plancher n'ajoute donc presque
- * jamais dix secondes d'attente : il ajoute ce qui manque aux dix.
+ * C'est ce diptyque qui fixe la durée plancher de l'écran : quinze secondes,
+ * soit les deux actes. En deçà, la planche de droite serait coupée en pleine
+ * ligne — l'assemblage réel demande le plus souvent cinq à huit secondes, et
+ * l'écran s'effacerait au début du second acte. Le plancher n'ajoute donc
+ * jamais quinze secondes d'attente : il ajoute ce qui manque aux quinze.
+ *
+ * C'est aussi, désormais, ce qui rend le plancher visible : à dix secondes il
+ * dépassait à peine l'assemblage, à quinze il le dépasse presque toujours. Un
+ * écran d'attente qui dure plus longtemps que ce qu'il attend est un choix, et
+ * il se tient tant que ce qui s'y passe vaut d'être regardé — c'est précisément
+ * ce que ces deux planches ont à faire.
  */
 
 const ETAPES = [
@@ -45,19 +51,24 @@ const ETAPES = [
 /**
  * Cadence d'affichage des étapes.
  *
- * Elle suit maintenant celle des planches dessinées : trois étapes à 2,8 s
- * couvrent huit secondes des dix que dure l'écran. À l'ancienne cadence
- * (1,1 s), la liste était entièrement cochée au bout de deux secondes et
- * l'écran passait les huit suivantes à ne plus rien annoncer.
+ * Elle suit celle des planches dessinées, et se règle sur elles : trois étapes
+ * à 4,2 s couvrent un peu moins de treize secondes des quinze que dure
+ * maintenant l'écran — la même proportion qu'auparavant, quand trois étapes à
+ * 2,8 s en couvraient huit sur dix.
+ *
+ * C'est la seule raison de ce réglage. À 2,8 s, la liste serait entièrement
+ * cochée au bout de huit secondes et l'écran passerait les sept suivantes à ne
+ * plus rien annoncer — exactement le défaut que la cadence précédente avait
+ * corrigé, réapparu par l'allongement des planches.
  */
-const ETAPE_MS = 2800
+const ETAPE_MS = 4200
 
 /**
  * Durée minimale de l'écran — les deux actes du diptyque dessiné, bout à bout
  * (voir l'en-tête). L'écran ne s'efface qu'une fois le rapport là *et* ce
  * plancher atteint, jamais avant l'un ou l'autre.
  */
-const PLANCHER_MS = ACTE_MS * 2
+const PLANCHER_MS = ACTE_GAUCHE_MS + ACTE_DROITE_MS
 
 /**
  * L'assemblage, en image — les feuilles du rapport qui viennent se ranger

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Loader2, MapPin } from 'lucide-react'
 // Leaflet et la carte ne servent qu'ici : les charger à la demande évite
 // d'alourdir de ~150 ko toutes les autres pages du site. Le module est
@@ -10,15 +10,27 @@ const BuildingMap = lazy(() =>
 import { detectPropertyType } from '../../lib/typeBien'
 
 /**
- * Délai au-delà duquel un repérage part sans attendre le cadastre.
+ * Délai au-delà duquel un repérage part sans attendre la détection du type.
  *
- * La contenance de la parcelle est une commodité, pas une condition : le
- * moteur d'estimation sait retrouver la parcelle lui-même, et rien ne justifie
- * d'immobiliser le parcours sur une réponse qui tarde. En pratique, le
- * cadastre répond en quelques centaines de millisecondes et ce minuteur ne
- * sert jamais.
+ * Le type du bien est une commodité, pas une condition : le moteur
+ * d'estimation sait le retrouver lui-même, et rien ne justifie d'immobiliser le
+ * parcours sur une réponse qui tarde.
+ *
+ * Ce minuteur portait naguère le nom du cadastre, et c'était le dire deux fois
+ * faux. La détection enchaîne deux appels de vitesses sans rapport : l'API
+ * Carto rend la parcelle en 100 à 300 ms — mesuré sur Paris, Marseille, Nice,
+ * Aix, Cassis, Lourmarin : jamais au-delà —, puis la BDNB rend les fiches du
+ * bâtiment en 0,8 à 10 s. Le minuteur ne coupait donc jamais le cadastre : il
+ * coupait la BDNB, une fois sur deux, et emportait au passage une parcelle
+ * acquise depuis dix fois le temps qu'il mesure. D'où deux champs vides dans le
+ * rapport — parcelle et contenance cadastrales — pour une source qui avait
+ * répondu, et répondu vite.
+ *
+ * La parcelle ne dépend donc plus de lui : elle arrive par `onParcelle` (voir
+ * `detectPropertyType`) dès que le cadastre a parlé, et le minuteur ne décide
+ * plus que du type.
  */
-const ATTENTE_CADASTRE_MS = 2500
+const ATTENTE_DETECTION_MS = 2500
 
 /**
  * Étape 3 — repérage du bien sur la photo aérienne.
@@ -31,7 +43,7 @@ const ATTENTE_CADASTRE_MS = 2500
  *
  * La détection du type (cadastre puis BDNB) part au même instant et se joue
  * derrière l'animation d'analyse plutôt qu'après elle ; on attend seulement sa
- * réponse — ou `ATTENTE_CADASTRE_MS` — avant de basculer, pour transmettre au
+ * réponse — ou `ATTENTE_DETECTION_MS` — avant de basculer, pour transmettre au
  * moteur la parcelle et la fiche déjà obtenues.
  *
  * Rien de tout cela ne transparaît à l'écran : `onEstimate` remonte la
@@ -44,6 +56,11 @@ export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress
   // cadastrale et la fiche BDNB obtenues au passage évitent au moteur
   // d'estimation de refaire la même chaîne d'appels quelques secondes plus tard.
   const [detection, setDetection] = useState(null)
+  // La parcelle, dès que le cadastre a répondu et sans attendre le reste de la
+  // détection. Dans une `ref` et non dans un état : rien ne l'affiche, et un
+  // rendu de plus relancerait le minuteur ci-dessous au moment même où elle
+  // arrive — le repérage attendrait alors 2,5 s de plus pour rien.
+  const parcelleTot = useRef(null)
 
   // Changer d'adresse (retour puis nouvelle saisie) doit repartir d'une carte vierge.
   useEffect(() => {
@@ -65,11 +82,17 @@ export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress
     // du bâtiment précédent resterait valide le temps que la nouvelle
     // aboutisse, et pourrait partir au calcul à la place de la bonne.
     setDetection(null)
+    parcelleTot.current = null
     if (!selection) return undefined
 
     const controller = new AbortController()
 
-    detectPropertyType(selection, { signal: controller.signal })
+    detectPropertyType(selection, {
+      signal: controller.signal,
+      onParcelle: (parcelle) => {
+        parcelleTot.current = parcelle
+      },
+    })
       .then(setDetection)
       .catch((error) => {
         if (error.name === 'AbortError') return
@@ -98,15 +121,20 @@ export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress
       // sans avoir à être montré ; un type lu dans une base peut, lui, tenir
       // lieu de réponse.
       typeConfiance: detection?.confiance ?? null,
-      parcelle: detection?.parcelle ?? null,
+      // La parcelle du cadastre, que la détection ait abouti ou non : c'est
+      // elle qui porte les deux champs cadastraux du rapport, et elle n'a
+      // aucune raison de tomber avec une BDNB lente. Les deux valeurs sont le
+      // même objet quand la détection a eu le temps de finir.
+      parcelle: detection?.parcelle ?? parcelleTot.current ?? null,
       fiche: detection?.fiche ?? null,
     })
   }, [onEstimate, selection, detection])
 
   // Aucune fenêtre, aucune question : le clic sur la carte suffit. On attend
-  // seulement que le cadastre ait répondu pour transmettre parcelle et fiche au
+  // seulement que la détection ait abouti pour transmettre type et fiche au
   // moteur, ce qui lui épargne d'aller les chercher ; passé le délai, on part
-  // sans, et il s'en charge.
+  // sans, et il s'en charge. La parcelle, elle, ne se perd plus dans cette
+  // attente — voir `ATTENTE_DETECTION_MS`.
   useEffect(() => {
     if (!selection) return undefined
 
@@ -115,7 +143,7 @@ export function EstimationBuildingStep({ address, onBack, onEstimate, onProgress
       return undefined
     }
 
-    const timer = setTimeout(startEstimate, ATTENTE_CADASTRE_MS)
+    const timer = setTimeout(startEstimate, ATTENTE_DETECTION_MS)
     return () => clearTimeout(timer)
   }, [selection, detection, startEstimate])
 

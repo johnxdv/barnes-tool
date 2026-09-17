@@ -188,8 +188,17 @@ function closestByFootprint(candidates, areaM2) {
  * d'estimation se contente du second — il lui faut un type quoi qu'il arrive —
  * là où le formulaire de caractéristiques n'ose se passer de la question que
  * sur la première (voir `estTypeFiable`).
+ *
+ * `onParcelle` est appelé dès que le cadastre a répondu, sans attendre la
+ * suite. Les deux maillons de la chaîne n'ont ni la même vitesse ni la même
+ * fiabilité : l'API Carto rend la parcelle en une à trois dixièmes de seconde,
+ * la BDNB met de huit dixièmes à dix secondes. Qui attend le résultat complet
+ * attend donc la seconde, et l'appelant qui renonce en cours de route perd la
+ * parcelle alors qu'elle était acquise depuis longtemps (voir
+ * `EstimationBuildingStep`). Le rappel sert exactement à cela : rendre la
+ * parcelle à l'instant où elle est connue, et non à l'instant où tout l'est.
  */
-export async function detectPropertyType(selection, { signal } = {}) {
+export async function detectPropertyType(selection, { signal, onParcelle } = {}) {
   const { lat, lon, areaM2, properties } = selection
   const isBuilding = selection.kind === 'batiment'
 
@@ -199,6 +208,11 @@ export async function detectPropertyType(selection, { signal } = {}) {
   } catch (error) {
     if (error.name === 'AbortError') throw error
   }
+
+  // Le signal est relu avant de rendre la parcelle : une sélection abandonnée
+  // peut avoir vu sa requête aboutir juste avant l'abandon, et son résultat
+  // remonterait alors à l'appelant qui regarde déjà un autre bâtiment.
+  if (parcelle && !signal?.aborted) onParcelle?.(parcelle)
 
   // Repérage libre : aucun contour n'a été retenu. Sur une parcelle cadastrée,
   // c'est un terrain ; ailleurs, on ne présume rien.

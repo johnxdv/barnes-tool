@@ -119,7 +119,7 @@ const ENCRE_TAMPON = '#B4002F'
 
 /**
  * Tampon d'approbation — l'écusson Barnes apposé au bout d'un cachet d'encre,
- * pendant l'analyse.
+ * dans le coin de l'écran d'analyse.
  *
  * ── Ce qu'il dit, et ce qu'il ne dit pas ──────────────────────────────────
  *
@@ -127,81 +127,56 @@ const ENCRE_TAMPON = '#B4002F'
  * secondes à se faire, sur un écran qui en dure douze, et rien ne le rejoue
  * ensuite. Une validation qui se rejouerait en boucle cesserait d'être une
  * validation pour devenir un élément de décor — même raison que pour
- * `CocheCertification`, dont il reprend l'esprit à plus grande échelle.
+ * `CocheCertification`, dont il reprend l'esprit.
  *
  * Il est muet pour les lecteurs d'écran (`aria-hidden`), et c'est délibéré :
  * l'outil n'agrée rien, il estime. Annoncer un tampon laisserait entendre une
  * validation officielle du bien, ce qui serait faux.
+ *
+ * ── Il est dessiné pour une taille, et c'est une seule ────────────────────
+ *
+ * Une vingt-cinquaine de pixels, dans le coin bas droit — la taille d'un folio.
+ * Tout ce qui suit en découle, et rien n'y serait justifiable trois fois plus
+ * grand :
+ *
+ *  - **`vector-effect="non-scaling-stroke"`** : les épaisseurs sont alors en
+ *    pixels d'écran et non en unités du cadre. Sans lui, un trait de 1,6 sur un
+ *    cadre de 120 rendu à 25 px fait un tiers de pixel — le navigateur le
+ *    délave au lieu de le tracer, et le cachet devient une poussière grise.
+ *  - **Un seul cercle.** Il y en avait deux, plus une couronne de repères :
+ *    à cette taille, ils tombent à un pixel les uns des autres et se mêlent en
+ *    un halo. L'écusson porte déjà son propre anneau de lettres.
+ *  - **Trois gestes, pas cinq** : le cercle, l'écusson, la coche.
  *
  * ── L'ordre des gestes ────────────────────────────────────────────────────
  *
  * Celui d'un vrai cachet, et c'est lui qui fait la lenteur habitée plutôt que
  * l'attente vide :
  *
- *  1. **le cercle extérieur** (0,2 → 1,8 s), d'un seul tour de pointe ;
- *  2. **le filet intérieur** (1,1 → 2,5 s), parti du bas pour que les deux
- *     tours ne se superposent pas — deux traits lancés du même point au même
- *     instant se lisent comme un seul trait épais ;
- *  3. **les deux repères** (2,5 s), à trois et neuf heures : la marque de
- *     calage d'un tampon de caoutchouc, et le seul ornement de la couronne ;
- *  4. **l'écusson** (2,9 s), qui ne se trace pas mais se pose — c'est un actif
+ *  1. **le cercle** (0,2 → 2,2 s), d'un seul tour de pointe, lent ;
+ *  2. **l'écusson** (2,6 s), qui ne se trace pas mais se pose — c'est un actif
  *     de marque, il n'a pas à être redessiné à la main (voir l'en-tête) ;
- *  5. **la coche** (4,6 → 5,9 s), en dernier et d'une pointe plus large : c'est
+ *  3. **la coche** (4,4 → 5,9 s), en dernier et d'une pointe plus large : c'est
  *     elle qui fait le tampon d'approbation, et elle n'a de sens qu'une fois le
  *     reste en place.
- *
- * ── Ce qui a été essayé et retiré ─────────────────────────────────────────
- *
- * Une couronne de vingt-quatre dents entre les deux cercles. Elle avait l'air
- * d'un cadran d'horloge : à intervalle régulier, sur un cercle, un trait radial
- * n'est plus un crénelage, c'est une graduation. L'écusson porte déjà son
- * propre anneau de lettres — un troisième cercle chargé faisait trois anneaux
- * concentriques, et un cachet de luxe n'en a jamais tant.
  */
 export function TamponBarnes({ className = '' }) {
   return (
     <span className={`relative block ${className}`} aria-hidden="true">
       <svg viewBox="0 0 120 120" className="h-full w-full" fill="none">
-        {/* Les deux cercles, décrits en arcs plutôt qu'en `<circle>` : un cercle
-            n'a pas de point de départ, donc rien à parcourir. */}
+        {/* Le cercle, décrit en un arc plutôt qu'en `<circle>` : un cercle n'a
+            pas de point de départ, donc rien à parcourir. */}
         <path
           d="M 60 4.5 A 55.5 55.5 0 1 1 59.9 4.5"
           pathLength="1"
           className="trace-encre"
-          style={{ '--duree': '1.6s', '--retard': '0.2s' }}
+          style={{ '--duree': '2s', '--retard': '0.2s' }}
           stroke={ENCRE_TAMPON}
-          strokeWidth="1.6"
-          strokeOpacity="0.85"
+          strokeWidth="1"
+          strokeOpacity="0.8"
           strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
         />
-        <path
-          d="M 60 110.5 A 50.5 50.5 0 1 1 60.1 110.5"
-          pathLength="1"
-          className="trace-encre"
-          style={{ '--duree': '1.4s', '--retard': '1.1s' }}
-          stroke={ENCRE_TAMPON}
-          strokeWidth="0.7"
-          strokeOpacity="0.35"
-          strokeLinecap="round"
-        />
-
-        {/* Les repères de calage, à trois et neuf heures. */}
-        {[
-          'M 4.6 60 L 9.4 60',
-          'M 110.6 60 L 115.4 60',
-        ].map((d) => (
-          <path
-            key={d}
-            d={d}
-            pathLength="1"
-            className="trace-encre"
-            style={{ '--duree': '0.25s', '--retard': '2.5s' }}
-            stroke={ENCRE_TAMPON}
-            strokeWidth="1.3"
-            strokeOpacity="0.5"
-            strokeLinecap="round"
-          />
-        ))}
 
         {/* La coche, apposée en dernier et d'une pointe plus large : sur un
             tampon, c'est la seule marque qui décide de quelque chose. */}
@@ -209,29 +184,30 @@ export function TamponBarnes({ className = '' }) {
           d="M 47 93 L 56 102 L 75 83"
           pathLength="1"
           className="trace-encre"
-          style={{ '--duree': '1.3s', '--retard': '4.6s' }}
+          style={{ '--duree': '1.5s', '--retard': '4.4s' }}
           stroke={ENCRE_TAMPON}
-          strokeWidth="2.2"
+          strokeWidth="1.5"
           strokeOpacity="0.9"
           strokeLinecap="round"
           strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
         />
       </svg>
 
-      {/* L'écusson, au centre de la couronne. Deux couches, comme dans
-          `LogoBarnes` : l'enveloppe porte le placement, l'image porte la pose —
-          `.pose-encre` écrit `transform`, et posée sur le même nœud elle
-          effacerait le `-translate-x-1/2` qui centre l'écusson.
+      {/* L'écusson, au centre du cercle. Deux couches, comme dans `LogoBarnes` :
+          l'enveloppe porte le placement, l'image porte la pose — `.pose-encre`
+          écrit `transform`, et posée sur le même nœud elle effacerait le
+          `-translate-x-1/2` qui centre l'écusson.
 
           Il est remonté au-dessus du centre (`top` à 14 %) : la coche occupe le
-          bas de la couronne, et un écusson centré la recevrait en travers. */}
+          bas du cercle, et un écusson centré la recevrait en travers. */}
       <span className="absolute left-1/2 top-[14%] w-[54%] -translate-x-1/2">
         <img
           src={LOGO_BARNES_SRC}
           alt=""
           draggable="false"
           className="pose-encre block w-full select-none"
-          style={{ '--retard': '2.9s', '--duree': '0.9s' }}
+          style={{ '--retard': '2.6s', '--duree': '0.9s' }}
           loading="eager"
           decoding="async"
         />

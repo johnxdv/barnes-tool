@@ -9,15 +9,23 @@ import { Touche, Trait } from './encre'
  *
  * ── Le dispositif ─────────────────────────────────────────────────────────
  *
- * Dix secondes, deux temps de cinq :
+ * Quinze secondes, deux temps inégaux :
  *
- *  - **0 à 5 s** — une scène se dessine dans la colonne de gauche.
- *  - **5 à 10 s** — une seconde scène, tirée dans le même lot mais jamais la
- *    même, se dessine dans la colonne de droite.
+ *  - **0 à 7 s** — une scène se dessine dans la colonne de gauche.
+ *  - **7 à 15 s** — une seconde scène, tirée dans le même lot mais jamais la
+ *    même, se dessine dans la colonne de droite, une seconde plus lentement
+ *    encore.
  *
- * Le second temps n'est pas un décalage de délais : la planche de droite est
- * **montée cinq secondes plus tard** (voir `DuoProvence`). C'est ce qui permet
- * d'écrire chaque scène avec ses propres retards, de zéro à cinq secondes, sans
+ * Les scènes sont pourtant toutes écrites sur cinq secondes, de 0,2 s à 4,9 s.
+ * Ce sont leurs **cadences** qui diffèrent — `--cadence`, lue par chaque tracé
+ * (voir `encre.jsx`), étire durées et retards d'un même facteur : 1,4 à gauche,
+ * 1,6 à droite. La planche ne s'achève donc pas au bout de cinq secondes pour
+ * attendre les deux suivantes, elle se dessine réellement plus lentement — ce
+ * qui est le geste demandé, et non un temps mort ajouté après lui.
+ *
+ * Le second temps, lui, n'est pas un décalage de délais : la planche de droite
+ * est **montée sept secondes plus tard** (voir `DuoProvence`). C'est ce qui
+ * permet d'écrire chaque scène avec ses propres retards, à partir de zéro, sans
  * avoir à propager un décalage dans deux cents tracés.
  *
  * La planche de droite est la même géométrie, retournée (`scale(-1, 1)`) : la
@@ -1147,8 +1155,24 @@ function tirerDeux() {
   return [SCENES[premier], SCENES[second]]
 }
 
-/** Durée d'un acte — la planche de droite démarre quand celle de gauche finit. */
-export const ACTE_MS = 5000
+/**
+ * Durée de chaque acte — la planche de droite démarre quand celle de gauche
+ * finit, et prend une seconde de plus qu'elle.
+ *
+ * L'écart entre les deux n'est pas une coquetterie : la planche de droite est
+ * la dernière chose qui bouge avant que le rapport s'affiche, et la ralentir
+ * d'un cran évite que l'écran paraisse s'emballer sur la fin.
+ */
+export const ACTE_GAUCHE_MS = 7000
+export const ACTE_DROITE_MS = 8000
+
+/**
+ * Les cadences correspondantes. Les scènes sont écrites sur cinq secondes ;
+ * c'est ce rapport qui les étire à sept et à huit (voir l'en-tête).
+ */
+const REFERENCE_MS = 5000
+const CADENCE_GAUCHE = ACTE_GAUCHE_MS / REFERENCE_MS
+const CADENCE_DROITE = ACTE_DROITE_MS / REFERENCE_MS
 
 /**
  * Une planche, dessinée dans son cadre, éventuellement retournée.
@@ -1156,12 +1180,25 @@ export const ACTE_MS = 5000
  * `miroir` retourne la géométrie : la pointe court alors de droite à gauche, et
  * la scène se penche vers le module depuis la droite. C'est une transformation
  * de dessin, pas de mise en page — le cadre, lui, ne bouge pas.
+ *
+ * `cadence` étire la chorégraphie entière (voir l'en-tête) : 1 rend la scène
+ * telle qu'elle est écrite, 1,4 la dessine en sept secondes au lieu de cinq.
  */
-function Planche({ scene, miroir = false, className = '' }) {
+function Planche({ scene, miroir = false, cadence = 1, className = '' }) {
   const { Dessin, titre } = scene
 
   return (
-    <svg viewBox={VUE} className={className} role="img" aria-label={titre} preserveAspectRatio="xMidYMid meet">
+    <svg
+      viewBox={VUE}
+      className={className}
+      role="img"
+      aria-label={titre}
+      preserveAspectRatio="xMidYMid meet"
+      // La cadence est posée sur le cadre et non sur chaque tracé : c'est une
+      // propriété héritée, et les deux cents `Trait` de la scène la lisent sans
+      // qu'aucun ait à la connaître.
+      style={{ '--cadence': cadence }}
+    >
       <g transform={miroir ? 'translate(300, 0) scale(-1, 1)' : undefined}>
         <Dessin />
       </g>
@@ -1207,10 +1244,10 @@ export function DuoProvence() {
 
   useEffect(() => {
     // Mouvement refusé : les deux planches arrivent ensemble, déjà dessinées (le
-    // filet d'`index.css` annule durées et retards). Les faire attendre cinq
+    // filet d'`index.css` annule durées et retards). Les faire attendre sept
     // secondes ne montrerait rien de plus — seulement une apparition sèche au
     // milieu de l'écran d'attente.
-    const minuteur = setTimeout(() => setSecond(true), reduce ? 0 : ACTE_MS)
+    const minuteur = setTimeout(() => setSecond(true), reduce ? 0 : ACTE_GAUCHE_MS)
     return () => clearTimeout(minuteur)
   }, [reduce])
 
@@ -1230,7 +1267,7 @@ export function DuoProvence() {
           transition={{ duration: reduce ? 0.2 : 1.1, ease: [0.22, 1, 0.36, 1] }}
           className="w-full"
         >
-          <Planche scene={gauche} className={`mx-auto ${planche}`} />
+          <Planche scene={gauche} cadence={CADENCE_GAUCHE} className={`mx-auto ${planche}`} />
         </motion.div>
       </div>
 
@@ -1242,7 +1279,7 @@ export function DuoProvence() {
             transition={{ duration: reduce ? 0.2 : 1.1, ease: [0.22, 1, 0.36, 1] }}
             className="w-full"
           >
-            <Planche scene={droite} miroir className={`mx-auto ${planche}`} />
+            <Planche scene={droite} miroir cadence={CADENCE_DROITE} className={`mx-auto ${planche}`} />
           </motion.div>
         </div>
       ) : null}

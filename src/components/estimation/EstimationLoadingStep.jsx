@@ -209,20 +209,30 @@ export function EstimationLoadingStep({ onDone, onProgress }) {
         </span>
       </motion.aside>
 
-      {/* Le cachet Barnes, apposé au flanc bas du module — six secondes de
-          tracé sur les douze que dure l'analyse (voir `TamponBarnes`).
+      {/* Le cachet Barnes, dans le coin bas droit de la fenêtre — six secondes
+          de tracé sur les douze que dure l'analyse (voir `TamponBarnes`).
 
           Il remplace la vignette à l'encre qui tenait cette place : une scène
           de seize rem sur toute la hauteur de la fenêtre pesait autant que le
           module qu'elle accompagnait, et c'est le module qu'on doit lire.
 
-          Petit et aligné en bas, il ne rivalise avec rien : il signe le coin
-          de l'écran pendant que l'analyse avance au milieu. Il reste posé en
-          absolu au flanc du module et ne pèse donc pas sur son centrage — voir
-          le commentaire de tête —, et ne paraît qu'à partir de 1280 px, comme
-          la vignette avant lui. */}
-      <div className="pointer-events-none absolute bottom-0 left-full hidden pl-12 xl:block">
-        <TamponBarnes className="h-32 w-32" />
+          Il a ensuite fondu de huit rem à une et demie, et quitté le flanc du
+          module pour le coin de la page. C'est un changement de nature, pas de
+          taille : à huit rem il accompagnait la lecture, à une et demie il la
+          signe — un folio, une marque d'imprimeur, quelque chose qu'on
+          remarque en levant les yeux et jamais avant. D'où `fixed` plutôt
+          qu'`absolute` : un folio se repère au coin de la page, pas au flanc de
+          ce qui est écrit dessus.
+
+          Les deux rem de marge ne sont pas négociables non plus — un coin est
+          une marge, pas une arête, et le cachet posé à touche-bord aurait l'air
+          d'y avoir glissé.
+
+          Il ne paraît qu'à partir de 1280 px, comme la vignette avant lui : en
+          dessous, un élément fixé au coin d'une page qui défile n'est plus une
+          signature, c'est une pastille flottante. */}
+      <div className="pointer-events-none fixed bottom-8 right-8 z-0 hidden xl:block">
+        <TamponBarnes className="h-[1.6rem] w-[1.6rem]" />
       </div>
     </div>
   )

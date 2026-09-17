@@ -30,6 +30,20 @@
 /** Rouge Barnes — l'encre, et la seule couleur de tous ces dessins. */
 export const ENCRE = '#B4002F'
 
+/**
+ * La cadence — le facteur par lequel une planche entière ralentit ou accélère.
+ *
+ * Durées et retards sont écrits en `calc(… * var(--cadence, 1))` : poser
+ * `--cadence` sur un ancêtre (le `<svg>` d'une planche, par exemple) étire toute
+ * sa chorégraphie sans toucher à un seul de ses tracés. Sans défaut à 1, il
+ * faudrait la déclarer partout ; avec, aucune scène existante ne bouge.
+ *
+ * C'est ce qui permet aux deux planches de l'écran d'assemblage de durer sept et
+ * huit secondes alors qu'elles sont écrites sur cinq (voir `ScenesProvence`) :
+ * elles se dessinent plus lentement, pas plus tard.
+ */
+const cadence = (secondes) => `calc(${secondes}s * var(--cadence, 1))`
+
 /** Un trait : sa forme, son épaisseur, et le moment où le pinceau le pose. */
 export function Trait({ d, duree, retard, largeur = 1.6, opacite = 1, couleur = ENCRE }) {
   return (
@@ -37,7 +51,7 @@ export function Trait({ d, duree, retard, largeur = 1.6, opacite = 1, couleur = 
       d={d}
       pathLength="1"
       className="trace-encre"
-      style={{ '--duree': `${duree}s`, '--retard': `${retard}s` }}
+      style={{ '--duree': cadence(duree), '--retard': cadence(retard) }}
       fill="none"
       stroke={couleur}
       strokeWidth={largeur}
@@ -66,7 +80,7 @@ export function Touche({ x, y, largeur, hauteur, retard, duree = 0.45, opacite =
       fill={ENCRE}
       fillOpacity={opacite}
       className="pose-encre"
-      style={{ '--retard': `${retard}s`, '--duree': `${duree}s` }}
+      style={{ '--retard': cadence(retard), '--duree': cadence(duree) }}
     />
   )
 }
