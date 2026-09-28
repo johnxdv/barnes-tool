@@ -101,11 +101,21 @@ export async function ventesSecteur({ lat, lon, departement, codeInsee, commune 
   // `.catch(() => [])` sur chaque millésime, et non sur l'ensemble : une année
   // interrompue — budget global épuisé, réseau capricieux — laisse les autres
   // en place au lieu de vider toutes les pages chiffrées d'un coup.
-  // `loadDepartementYear` avale déjà ses propres pannes, mais relaie
-  // l'annulation ; c'est elle qu'on absorbe ici.
+  //
+  // Depuis le portage du moteur, `loadDepartementYear` n'avale plus ses pannes
+  // : elle rend `{ sales, publie }` et **lève** `DvfIndisponible` quand la
+  // source est en panne, parce que l'estimation, elle, doit pouvoir distinguer
+  // un département sans ventes d'un fichier qui n'a pas répondu. Le rapport n'a
+  // pas ce besoin — une page de marché vide reste une page — et garde donc le
+  // comportement qu'il avait toujours eu : la panne est absorbée ici, millésime
+  // par millésime, et seules les ventes descendent.
   const millesimes = []
   await inBatches(candidateYears(ANNEES), async (year) => {
-    millesimes.push(await loadDepartementYear(departement, year, { signal }).catch(() => []))
+    millesimes.push(
+      await loadDepartementYear(departement, year, { signal })
+        .then((millesime) => millesime.sales)
+        .catch(() => []),
+    )
   })
 
   const logements = millesimes.flat().filter((sale) => LOGEMENTS.has(sale.kind))

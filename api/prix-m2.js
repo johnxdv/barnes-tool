@@ -53,8 +53,16 @@ async function apercuDvf({ lat, lon, type, departement }, { signal }) {
   // Une année de plus que demandé : le millésime de l'année en cours n'est
   // publié qu'avec plusieurs mois de retard, et reviendrait vide.
   const years = candidateYears(APERCU_YEARS + 1)
+  // `loadDepartementYear` rend `{ sales, publie }` et lève `DvfIndisponible`
+  // depuis le portage du moteur. Cet aperçu-ci garde son ancien comportement :
+  // il n'a pas de prix à défendre, seulement un ordre de grandeur à afficher
+  // avant le parcours, et l'appelant a déjà son propre repli.
   const batches = await Promise.all(
-    years.map((year) => loadDepartementYear(departement, year, { signal }).catch(() => [])),
+    years.map((year) =>
+      loadDepartementYear(departement, year, { signal })
+        .then((millesime) => millesime.sales)
+        .catch(() => []),
+    ),
   )
 
   const sales = batches.flat().filter((sale) => kinds.has(sale.kind))
