@@ -590,19 +590,15 @@ function estimation({ price, characteristics, ajustements, monaco }) {
     haut: formatEuros(fourchette?.high),
     prixM2: surface > 0 ? parM2(price / surface) : null,
     surface: formatSurfaceOuNull(surface),
-    // Liste vide quand le formulaire n'a rien déclaré qui pèse sur le prix :
-    // la page n'affiche alors pas la section, plutôt qu'un tableau vide qui
-    // laisserait croire à un relevé manquant.
-    ajustements: details.map((detail) => ({
-      cle: `estimation.ajustement.${detail.id}`,
+    // Les critères que l'avis de valeur a retenus — nommés, jamais chiffrés.
+    //
+    // Liste vide quand le formulaire n'a rien déclaré de déterminant : la page
+    // n'affiche alors pas la section, plutôt qu'une liste vide qui se lirait
+    // comme un relevé manquant.
+    criteres: details.map((detail) => ({
+      cle: `estimation.critere.${detail.id}`,
       label: detail.label,
-      valeur: formatPct(detail.coefficient * 100),
     })),
-    ajustementTotal: details.length > 0 ? formatPct((ajustements?.coefficient ?? 0) * 100) : null,
-    // Le plafond a-t-il mordu ? La page le dit en toutes lettres : un total qui
-    // ne fait pas la somme de ses lignes, sans explication, passerait pour une
-    // erreur de calcul.
-    ajustementPlafonne: ajustements?.plafonne === true,
   }
 }
 

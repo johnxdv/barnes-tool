@@ -29,6 +29,7 @@
 // d'API n'est nécessaire, et aucune ne transiterait par le front de toute façon.
 
 import { ajustementsPrix } from './_lib/ajustements.js'
+import { prixDePresentation } from './_lib/presentation.js'
 import { describeBien } from './_lib/bien.js'
 import { departementPricePerM2, findComparables } from './_lib/comparables.js'
 import { DvfIndisponible } from './_lib/dvf.js'
@@ -261,7 +262,9 @@ export default async function handler(req, res) {
     // et le plafond français (20 M€) écrêterait une villa monégasque de grande
     // surface sur un montant qui, lui, n'a rien d'aberrant. L'ajustement est
     // lui-même plafonné à ±15 %, il ne peut pas en sortir.
-    const price = round(MONACO_PRICE_PER_M2 * surfaceM2 * (1 + ajustements.coefficient))
+    const calcule = round(MONACO_PRICE_PER_M2 * surfaceM2 * (1 + ajustements.coefficient))
+    // Dernière étape, après le barème et les ajustements : voir .
+    const price = prixDePresentation(calcule)
 
     const meta = {
       type,
@@ -381,7 +384,11 @@ export default async function handler(req, res) {
     const ajustements = ajustementsPrix(characteristics)
 
     const raw = prix.pricePerM2 * surfaceM2 * (1 + ajustements.coefficient)
-    const price = clampPrice(round(raw))
+    const calcule = clampPrice(round(raw))
+    // Dernière étape, après le moteur et la couche d'ajustements : voir
+    // `_lib/presentation.js`. Le prix au m² affiché et la fourchette se
+    // déduisent du montant, et suivent donc sans traitement propre.
+    const price = prixDePresentation(calcule)
 
     const meta = {
       type,

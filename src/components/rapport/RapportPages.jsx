@@ -1221,8 +1221,7 @@ export function PageComparables({ comparables, reperes, numero }) {
       ) : (
         <>
           <p className="text-[0.82rem] leading-relaxed text-marine/60">
-            Les biens de même nature vendus le plus près du vôtre. Ce sont ces ventes, et non un
-            barème, qui portent l’estimation.
+            Ventes de biens de même nature relevées à proximité, à titre de référence de marché.
           </p>
 
           <Section className="mt-6">
@@ -1337,35 +1336,32 @@ export function PageEstimation({ estimation, marche, numero }) {
 
           {/* Ce qui a écarté le montant de la médiane du secteur, ligne à
               ligne. La section n'apparaît que s'il y a quelque chose à
-              montrer : un formulaire qui n'a rien déclaré de déterminant ne
-              produit aucun ajustement, et un tableau vide se lirait comme un
-              relevé manquant.
+              montrer : un formulaire qui n'a rien déclaré de déterminant n'en
+              retient aucun, et une liste vide se lirait comme un relevé
+              manquant.
 
-              Ces lignes sont dans le rapport pour une raison précise : un
-              vendeur à qui l'on annonce une décote a le droit de savoir
-              laquelle, et l'agent qui la lui présente doit pouvoir la défendre
-              sans deviner d'où elle sort. */}
-          {estimation.ajustements.length > 0 ? (
-            <Section
-              titre="Ajustements appliqués"
-              aparte={estimation.ajustementTotal ? `total : ${estimation.ajustementTotal}` : null}
-              className="mt-6"
-            >
-              <ListeChamps
-                champs={estimation.ajustements.map((ajustement) => ({
-                  id: ajustement.cle,
-                  label: ajustement.label,
-                  valeur: ajustement.valeur,
-                }))}
-                colonnes={2}
-              />
-              <p className="mt-2.5 text-[0.7rem] leading-relaxed text-marine/45">
-                Appliqués à la valeur tirée des ventes comparables, qui décrit un bien moyen du
-                secteur. Chaque ajustement est plafonné, et leur cumul aussi
-                {estimation.ajustementPlafonne
-                  ? ' — c’est ce plafond qui explique que le total ne fasse pas la somme des lignes.'
-                  : '.'}
-              </p>
+              Les critères sont nommés et non chiffrés : le rapport dit ce qui a
+              été pris en compte, il n'expose pas le barème de la maison. */}
+          {estimation.criteres.length > 0 ? (
+            <Section titre="Critères pris en compte" className="mt-6">
+              <ul className="grid grid-cols-2 gap-x-6">
+                {estimation.criteres.map((critere) => (
+                  <li
+                    key={critere.cle}
+                    className="flex items-baseline gap-2.5 border-b border-marine/8 py-[0.26rem]"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="h-1 w-1 shrink-0 rounded-full bg-barnes/60"
+                    />
+                    <ChampModifiable
+                      cle={critere.cle}
+                      valeur={critere.label}
+                      className="text-[0.76rem] leading-snug text-marine/70"
+                    />
+                  </li>
+                ))}
+              </ul>
             </Section>
           ) : null}
 
@@ -1374,8 +1370,8 @@ export function PageEstimation({ estimation, marche, numero }) {
               cle="estimation.synthese"
               valeur={
                 marche
-                  ? `Le bien est estimé à partir des ventes réalisées sur ${marche.zone}, dont le prix médian s’établit à ${marche.lignes[0].valeur}. La fourchette tient compte de l’état du marché et des caractéristiques déclarées ; elle n’intègre ni le mobilier ni d’éventuels travaux en cours.`
-                  : 'Le bien est estimé à partir des ventes comparables relevées à proximité et des caractéristiques déclarées. La fourchette n’intègre ni le mobilier ni d’éventuels travaux en cours.'
+                  ? 'Estimation de l’agence. La fourchette tient compte de l’état du marché et des caractéristiques déclarées ; elle n’intègre ni le mobilier ni d’éventuels travaux en cours.'
+                  : 'Estimation de l’agence. La fourchette n’intègre ni le mobilier ni d’éventuels travaux en cours.'
               }
               as="p"
               multiligne
