@@ -1221,7 +1221,9 @@ export function PageComparables({ comparables, reperes, numero }) {
       ) : (
         <>
           <p className="text-[0.82rem] leading-relaxed text-marine/60">
-            Ventes de biens de même nature relevées à proximité, à titre de référence de marché.
+            Les ventes retenues pour établir l’estimation — celles-là mêmes, et non un relevé de
+            voisinage fait à part. Chacune est pondérée selon sa distance, sa ressemblance au bien
+            et son ancienneté.
           </p>
 
           <Section className="mt-6">
@@ -1290,9 +1292,10 @@ export function PageComparables({ comparables, reperes, numero }) {
           <p className="mt-5 text-[0.7rem] leading-relaxed text-marine/45">
             Les distances sont calculées depuis le bien estimé. Les prix sont ceux effectivement
             enregistrés à l’acte, frais de notaire exclus. La colonne « €/m² act. » ramène ce prix
-            au semestre le plus récent publié, selon l’évolution du marché local. « Sim. » note de
-            0 à 100 la ressemblance au bien estimé, en surface et en terrain. « nc » signale un
-            terrain non renseigné au registre, ce qui ne présume pas de son absence.
+            au semestre le plus récent publié, selon l’évolution du marché local — c’est cette
+            valeur qui entre dans l’estimation. « Sim. » note de 0 à 100 la ressemblance au bien
+            estimé, en surface et en terrain. « nc » signale un terrain non renseigné au registre,
+            ce qui ne présume pas de son absence.
           </p>
 
           <p className="mt-auto pt-5 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
@@ -1345,6 +1348,17 @@ export function PageEstimation({ estimation, marche, numero }) {
               />
             ) : null}
 
+            {/* Le montant s'entend honoraires inclus. Discret — c'est une
+                précision d'unité, pas un argument — mais présent sous le
+                chiffre qu'il qualifie, et non relégué aux mentions légales. */}
+            {estimation.mentionHonoraires ? (
+              <ChampModifiable
+                cle="estimation.mentionHonoraires"
+                valeur={estimation.mentionHonoraires}
+                as="p"
+                className="mt-2 block text-[0.62rem] text-marine/35"
+              />
+            ) : null}
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -1352,43 +1366,64 @@ export function PageEstimation({ estimation, marche, numero }) {
             <Statistique cle="estimation.haut" label="Fourchette haute" valeur={estimation.haut} accent />
           </div>
 
-          {/* Les caractéristiques que l'avis de valeur a prises en compte,
-              nommées et non chiffrées : le rapport dit ce qui a été considéré,
-              il n'expose pas le barème de la maison. La section n'apparaît que
-              s'il y a quelque chose à montrer — un formulaire qui n'a rien
-              déclaré de déterminant n'en produit aucune, et une liste vide se
-              lirait comme un relevé manquant. */}
-          {estimation.criteres.length > 0 ? (
-            <Section titre="Critères pris en compte" className="mt-6">
-              <ul className="grid grid-cols-2 gap-x-6">
-                {estimation.criteres.map((critere) => (
-                  <li
-                    key={critere.cle}
-                    className="flex items-baseline gap-2.5 border-b border-marine/8 py-[0.26rem]"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="h-1 w-1 shrink-0 rounded-full bg-barnes/60"
-                    />
-                    <ChampModifiable
-                      cle={critere.cle}
-                      valeur={critere.label}
-                      className="text-[0.76rem] leading-snug text-marine/70"
-                    />
-                  </li>
-                ))}
-              </ul>
+          {/* D'où vient la largeur de la fourchette. Elle n'est plus la même
+              pour tous les biens : ± 15 % quand des ventes vraiment comparables
+              ont été trouvées à proximité immédiate, ± 25 % quand il a fallu
+              élargir faute de points de comparaison. Une fourchette large sans
+              explication passerait pour une imprécision du rapport, là où c'est
+              une information sur le secteur — et l'agent doit pouvoir la dire. */}
+          {estimation.motifFourchette ? (
+            <ChampModifiable
+              cle="estimation.motifFourchette"
+              valeur={estimation.motifFourchette}
+              as="p"
+              multiligne
+              className="mt-2.5 block text-[0.7rem] leading-relaxed text-marine/45"
+            />
+          ) : null}
+
+          {/* Ce qui a écarté le montant de la médiane du secteur, ligne à
+              ligne. La section n'apparaît que s'il y a quelque chose à
+              montrer : un formulaire qui n'a rien déclaré de déterminant ne
+              produit aucun ajustement, et un tableau vide se lirait comme un
+              relevé manquant.
+
+              Ces lignes sont dans le rapport pour une raison précise : un
+              vendeur à qui l'on annonce une décote a le droit de savoir
+              laquelle, et l'agent qui la lui présente doit pouvoir la défendre
+              sans deviner d'où elle sort. */}
+          {estimation.ajustements.length > 0 ? (
+            <Section
+              titre="Ajustements appliqués"
+              aparte={estimation.ajustementTotal ? `total : ${estimation.ajustementTotal}` : null}
+              className="mt-6"
+            >
+              <ListeChamps
+                champs={estimation.ajustements.map((ajustement) => ({
+                  id: ajustement.cle,
+                  label: ajustement.label,
+                  valeur: ajustement.valeur,
+                }))}
+                colonnes={2}
+              />
+              <p className="mt-2.5 text-[0.7rem] leading-relaxed text-marine/45">
+                Appliqués à la valeur tirée des ventes comparables, qui décrit un bien moyen du
+                secteur. Chaque ajustement est plafonné, et leur cumul aussi
+                {estimation.ajustementPlafonne
+                  ? ' — c’est ce plafond qui explique que le total ne fasse pas la somme des lignes.'
+                  : '.'}
+              </p>
             </Section>
           ) : null}
 
-          {/* Le rapport n'affirme plus que le montant se déduit des ventes
-              voisines : il le présente pour ce qu'il est, l'avis de valeur de
-              l'agence. Les ventes de la page précédente restent au dossier à
-              titre de référence de marché, et le lecteur en tire ce qu'il veut. */}
           <Section titre="Synthèse" className="mt-7">
             <ChampModifiable
               cle="estimation.synthese"
-              valeur="Estimation de l’agence."
+              valeur={
+                marche
+                  ? `Le bien est estimé à partir des ventes réalisées sur ${marche.zone}, dont le prix médian s’établit à ${marche.lignes[0].valeur}. La fourchette tient compte de l’état du marché et des caractéristiques déclarées ; elle n’intègre ni le mobilier ni d’éventuels travaux en cours.`
+                  : 'Le bien est estimé à partir des ventes comparables relevées à proximité et des caractéristiques déclarées. La fourchette n’intègre ni le mobilier ni d’éventuels travaux en cours.'
+              }
               as="p"
               multiligne
               className="block text-[0.85rem] leading-relaxed text-marine/70"
