@@ -551,18 +551,52 @@ function historique(h, zone) {
 
 const KIND_LABELS = { maison: 'Maison', appartement: 'Appartement', terrain: 'Terrain' }
 
-/** Ventes comparables — les biens voisins réellement vendus. */
+/**
+ * Ventes comparables — les biens voisins réellement vendus.
+ *
+ * CE QUI A CHANGÉ AU PORTAGE DU MOTEUR. Ces ventes ne sont plus un relevé de
+ * voisinage fait à part, par `api/rapport.js`, à côté du calcul : ce sont **les
+ * ventes qui portent le montant**, celles que le moteur a retenues, pondérées et
+ * actualisées. La page peut donc dire, sans forcer le trait, que le prix vient
+ * de là — et l'agent qui retire une ligne du tableau sait désormais qu'il retire
+ * une vente qui a réellement pesé.
+ *
+ * Elles arrivent aussi plus riches, et trois colonnes le montrent :
+ *
+ *  - le **€/m² actualisé**, ramené au dernier semestre publié par l'indice
+ *    temporel du secteur. C'est lui qui entre dans la médiane, pas le prix brut
+ *    de l'acte — une vente de 2021 comparée telle quelle tirerait l'estimation
+ *    vers un marché qui n'existe plus. Les deux sont affichés : le brut parce
+ *    qu'il est au registre et qu'un vendeur peut le vérifier, l'actualisé parce
+ *    que c'est celui qui compte.
+ *  - le **terrain**, que le moteur valorise désormais (maisons) et qui explique
+ *    à lui seul une partie de l'écart entre deux €/m² voisins. « nc » quand DVF
+ *    ne le renseigne pas — ce qui ne veut pas dire « pas de terrain ».
+ *  - la **similarité**, de 0 à 100 : la note de ressemblance en surface et en
+ *    terrain, hors distance et hors ancienneté. Elle dit pourquoi une vente très
+ *    proche peut compter moins qu'une vente un peu plus loin.
+ *
+ * Le nombre de pièces a disparu du tableau, faute de source : le moteur ne le
+ * lit plus dans DVF — il ne s'en sert pas pour comparer, la surface et le
+ * terrain suffisant — et une colonne remplie de tirets valait moins que la
+ * place qu'elle prenait sur une page A4.
+ */
 function comparables(liste) {
   if (!liste || liste.length === 0) return null
 
   return liste.map((vente, index) => ({
     cle: `comparable.${index}`,
     type: KIND_LABELS[vente.kind] ?? 'Bien',
+    adresse: vente.adresse ?? null,
     distance: formatDistance(vente.distanceM) ?? '',
     surface: formatSurface(vente.surface),
-    pieces: vente.rooms == null ? '—' : `${vente.rooms} p.`,
+    // « nc » et non « — » : DVF distingue mal le terrain absent du terrain non
+    // renseigné, et le tiret se lirait comme une maison sans terrain.
+    terrain: vente.terrainConnu && vente.terrainM2 > 0 ? formatSurface(vente.terrainM2) : 'nc',
     prix: formatEuros(vente.price) ?? '',
     prixM2: parM2(vente.pricePerM2) ?? '',
+    prixM2Actualise: parM2(vente.prixM2Actualise) ?? '',
+    similarite: vente.similarite == null ? '—' : `${Math.round(vente.similarite * 100)}`,
     date: formatMois(vente.date) ?? '',
   }))
 }
@@ -577,17 +611,56 @@ function comparables(liste) {
  * laquelle, et l'agent qui présente le rapport doit pouvoir la défendre ligne à
  * ligne (voir `api/_lib/ajustements.js`).
  */
-function estimation({ price, characteristics, ajustements, monaco }) {
+/** Ce que chaque niveau de confiance vaut en demi-largeur de fourchette. */
+const DEMI_LARGEUR_PAR_CONFIANCE = { normale: 0.15, moyenne: 0.2, faible: 0.25 }
+
+/**
+ * Comment la fourchette a été établie, en une phrase que l'agent peut lire à
+ * voix haute.
+ *
+ * Elle n'est plus un pourcentage fixe : sa largeur dit quelque chose du calcul
+ * qui l'a produite. ±15 % signifie que cinq à huit ventes vraiment comparables
+ * ont été trouvées à moins de 500 m ; ±25 %, qu'il a fallu relâcher la fenêtre
+ * de surface ou s'éloigner pour réunir un échantillon. Afficher la largeur sans
+ * dire d'où elle vient ferait passer un écart plus large pour une imprécision
+ * du rapport, là où c'est une information sur le marché.
+ */
+const MOTIF_CONFIANCE = {
+  normale:
+    'Fourchette de ± 15 % : des ventes comparables ont été relevées à proximité immédiate du bien.',
+  moyenne:
+    'Fourchette de ± 20 % : les ventes comparables les plus proches ont été relevées à l’échelle du secteur.',
+  faible:
+    'Fourchette de ± 25 % : le bien ou son secteur offrent peu de points de comparaison directs.',
+}
+
+function estimation({ price, characteristics, ajustements, fourchette: bornes, monaco }) {
   if (price == null) return null
 
-  const fourchette = priceRange(price, monaco ? MONACO_RANGE_PCT : undefined)
   const surface = characteristics?.surfaceHabitable ?? null
   const details = ajustements?.details ?? []
+
+  // Les bornes viennent du moteur, qui les tire du niveau de confiance de son
+  // calcul. `priceRange` ne sert plus que de repli — un rapport rouvert depuis
+  // un état antérieur au portage n'en porte pas, et vaut mieux affiché avec une
+  // fourchette approchée que privé de la sienne.
+  const confiance = bornes?.confiance ?? null
+  const fourchette =
+    bornes?.low != null && bornes?.high != null
+      ? { low: bornes.low, high: bornes.high }
+      : priceRange(
+          price,
+          monaco ? MONACO_RANGE_PCT : (DEMI_LARGEUR_PAR_CONFIANCE[confiance] ?? undefined),
+        )
 
   return {
     prix: formatEuros(price),
     bas: formatEuros(fourchette?.low),
     haut: formatEuros(fourchette?.high),
+    confiance,
+    // Absent à Monaco, dont la fourchette relève d'un barème et non d'un
+    // échantillon de ventes.
+    motifFourchette: monaco ? null : (MOTIF_CONFIANCE[confiance] ?? null),
     prixM2: surface > 0 ? parM2(price / surface) : null,
     surface: formatSurfaceOuNull(surface),
     // Liste vide quand le formulaire n'a rien déclaré qui pèse sur le prix :
@@ -647,6 +720,8 @@ export function construireModele({
   address,
   selection,
   price,
+  fourchette,
+  comparables: ventesRetenues,
   ajustements,
   characteristics,
   rapport,
@@ -698,8 +773,13 @@ export function construireModele({
     reperes: reperes(rapport?.reperes),
     budgets: budgets(rapport?.budgets, rapport?.zone),
     historique: historique(rapport?.historique, rapport?.zone),
-    comparables: comparables(rapport?.comparables),
-    estimation: estimation({ price, characteristics, ajustements, monaco }),
+    // Les ventes du moteur passent avant celles que `api/rapport.js` relève de
+    // son côté : ce sont elles qui portent le montant affiché deux pages plus
+    // loin. Le relevé du rapport ne sert plus que de repli — un parcours
+    // antérieur au portage, ou une estimation hors couverture DVF, n'en
+    // rapportent aucune.
+    comparables: comparables(ventesRetenues?.length > 0 ? ventesRetenues : rapport?.comparables),
+    estimation: estimation({ price, characteristics, ajustements, fourchette, monaco }),
     acquereur: acquereur(rapport?.profilAcquereur, rapport?.credit),
     agence: agence(),
   }

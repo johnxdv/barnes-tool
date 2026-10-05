@@ -36,9 +36,22 @@ const TIMEOUT_MS = 15000
  */
 export const AUCUN_AJUSTEMENT = { coefficient: 0, plafonne: false, details: [] }
 
-/** Réponse rendue quand rien n'a pu être obtenu — même forme que les autres. */
-const echec = () => ({
+/**
+ * Réponse rendue quand rien n'a pu être obtenu — même forme que les autres.
+ *
+ * `indisponible` distingue les deux façons de n'avoir pas de prix, et c'est
+ * tout l'objet de ce champ : une source DVF en panne (503 `dvf-indisponible`)
+ * n'est pas la même chose qu'un secteur sans ventes. Le premier cas se rejoue
+ * — la page d'indisponibilité propose de relancer ; le second ne se rejouera
+ * jamais mieux. Voir `EstimationIndisponibleStep`.
+ */
+const echec = (indisponible = null) => ({
   price: null,
+  low: null,
+  high: null,
+  confiance: null,
+  comparables: [],
+  indisponible,
   detection: AUCUNE_DETECTION,
   ajustements: AUCUN_AJUSTEMENT,
 })
@@ -95,7 +108,22 @@ export async function requestEstimation(selection) {
     // surface déclarée, sans cadastre ni comparables (voir `src/lib/monaco.js`).
     monaco,
     kind: selection.kind ?? null,
-    type: selection.type ?? null,
+    // LE TYPE DÉCLARÉ PASSE AVANT LE TYPE DÉTECTÉ, et c'est un correctif.
+    //
+    // Seul le type détecté sur la carte partait ici, y compris au second appel,
+    // c'est-à-dire alors même que l'agent venait de trancher dans le formulaire.
+    // Une détection en échec envoyait donc `autre` au moteur — et depuis le
+    // portage, `autre` se compare aux **maisons** (`comparableKinds`), là où
+    // l'ancienne version prenait une médiane tous logements confondus. Mesuré
+    // au 132 rue Paradis à Marseille, sur un appartement de 70 m² : 294 000 €
+    // avec le bon type, 410 000 € avec `autre`, soit +39,5 % sur huit
+    // comparables qui étaient tous des maisons.
+    //
+    // `api/rapport.js` lisait déjà le type du formulaire en priorité (voir
+    // `src/lib/rapport.js`) : l'estimation et le rapport s'accordent désormais.
+    // Le repli reste la détection — le premier appel précède le formulaire, et
+    // « Autre » déclaré n'est pas une réponse exploitable.
+    type: typeExploitable(selection.characteristics?.typeBien) ?? selection.type ?? null,
     // Le degré de confiance du type détecté sur la carte. Le moteur n'en a que
     // faire pour calculer — il lui faut un type, fiable ou non — mais c'est lui
     // qui décidera si le formulaire de caractéristiques reprend ce type sans
@@ -109,9 +137,10 @@ export async function requestEstimation(selection) {
     surfaceM2: selection.surfaceM2 ?? null,
     // Le formulaire de caractéristiques, quand il a été rempli — absent au
     // premier appel, qui le précède. Le serveur en tire les ajustements de prix
-    // (état général, classe énergie, standing, étage, piscine, stationnements ;
-    // voir `api/_lib/ajustements.js`). Les photos en sont retirées : aucun calcul ne
-    // les regarde, et elles se compteraient en mégaoctets sur la requête.
+    // (état général, classe énergie, standing, piscine, stationnements ; voir
+    // `api/_lib/ajustements.js`) et l'étage, que le moteur applique lui-même.
+    // Les photos en sont retirées : aucun calcul ne les regarde, et elles se
+    // compteraient en mégaoctets sur la requête.
     characteristics: sansPhotos(selection.characteristics ?? null),
     // Parcelle cadastrale et fiche BDNB ont déjà été obtenues pour déterminer
     // le type du bien, au moment du clic sur la carte. Les retransmettre évite
@@ -144,7 +173,18 @@ export async function requestEstimation(selection) {
 
     if (!response.ok) {
       console.error(`[estimation] ${ENDPOINT} a répondu ${response.status}`)
-      return echec()
+
+      // 503 : une source DVF n'a pas répondu, réessais épuisés. Le serveur ne
+      // rend plus de prix de consolation dans ce cas (voir l'en-tête de
+      // `api/estimation.js`), et c'est bien un échec technique — donc
+      // rejouable. On remonte son motif tel quel : il ne s'affiche pas, il se
+      // journalise.
+      if (response.status === 503) {
+        const detail = await response.json().catch(() => null)
+        return echec({ motif: detail?.motif ?? 'dvf-indisponible', rejouable: true })
+      }
+
+      return echec({ motif: `http-${response.status}`, rejouable: response.status >= 500 })
     }
 
     const data = await response.json().catch(() => null)
@@ -158,20 +198,84 @@ export async function requestEstimation(selection) {
       // montant manquant n'est pas une raison de redemander à l'agent ce que
       // les bases ont su dire du bien. Les ajustements, eux, ne survivent pas à
       // l'absence du montant sur lequel ils portaient.
-      return { price: null, detection, ajustements: AUCUN_AJUSTEMENT }
+      return { ...echec({ motif: 'sans-montant', rejouable: false }), detection }
     }
 
-    return { price, detection, ajustements }
+    return {
+      price,
+      // Les bornes viennent du serveur depuis le portage du moteur : leur
+      // largeur ne dépend plus d'un pourcentage fixe côté front, mais du niveau
+      // de confiance du calcul — ±15 % en confiance normale, ±20 % en moyenne,
+      // ±25 % en faible. Le front ne la recalcule plus (voir `priceRange`).
+      low: nombreOuNull(data?.low),
+      high: nombreOuNull(data?.high),
+      confiance: CONFIANCES.includes(data?.confiance) ? data.confiance : null,
+      // Les ventes qui portent réellement l'estimation — celles que le moteur a
+      // retenues et pondérées, et non un relevé de voisinage fait à part. C'est
+      // cette liste que la page « ventes comparables » du rapport met en page.
+      comparables: lireComparables(data?.comparables),
+      indisponible: null,
+      detection,
+      ajustements,
+    }
   } catch (error) {
     console.error('[estimation] Appel au moteur en échec —', error)
-    return echec()
+    return echec({ motif: 'reseau', rejouable: true })
   }
+}
+
+const nombreOuNull = (valeur) => {
+  const n = Number(valeur)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** Les trois niveaux que le moteur produit, et qui règlent la fourchette. */
+const CONFIANCES = ['normale', 'moyenne', 'faible']
+
+/**
+ * Relit les comparables avant de les laisser entrer dans le rapport.
+ *
+ * Même exigence que pour la détection : ce que le serveur renvoie ici finit
+ * dans un tableau que l'agent présente à son client, et qu'il peut corriger à
+ * la main. Une ligne mal formée y passerait pour une vente réelle. On garde
+ * donc ce qui se lit, et on jette le reste.
+ */
+function lireComparables(liste) {
+  if (!Array.isArray(liste)) return []
+
+  return liste
+    .filter((v) => v && typeof v === 'object' && nombreOuNull(v.price))
+    .map((v) => ({
+      kind: typeof v.kind === 'string' ? v.kind : null,
+      adresse: typeof v.adresse === 'string' ? v.adresse : null,
+      commune: typeof v.commune === 'string' ? v.commune : null,
+      date: typeof v.date === 'string' ? v.date : null,
+      semestre: typeof v.semestre === 'string' ? v.semestre : null,
+      surface: nombreOuNull(v.surface),
+      terrainM2: nombreOuNull(v.terrainM2),
+      terrainConnu: v.terrainConnu === true,
+      dependance: v.dependance === true,
+      price: nombreOuNull(v.price),
+      pricePerM2: nombreOuNull(v.pricePerM2),
+      prixM2Actualise: nombreOuNull(v.prixM2Actualise),
+      coefficientTemps: nombreOuNull(v.coefficientTemps),
+      distanceM: Number.isFinite(Number(v.distanceM)) ? Number(v.distanceM) : null,
+      similarite: Number.isFinite(Number(v.similarite)) ? Number(v.similarite) : null,
+      poids: Number.isFinite(Number(v.poids)) ? Number(v.poids) : null,
+    }))
 }
 
 /** Classes de l'étiquette énergie, dans l'ordre de l'échelle réglementaire. */
 const CLASSES_DPE = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
 
 const TYPES_FORMULAIRE = ['maison', 'appartement']
+
+/**
+ * Type déclaré au formulaire, s'il désigne un marché que le moteur sait
+ * comparer — « Autre » et un champ vide n'en sont pas, et valent mieux remplacés
+ * par ce que la carte a détecté.
+ */
+const typeExploitable = (valeur) => (TYPES_FORMULAIRE.includes(valeur) ? valeur : null)
 
 /**
  * Relit le bloc de détection avant de le laisser entrer dans le formulaire.

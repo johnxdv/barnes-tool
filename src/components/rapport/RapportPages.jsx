@@ -1221,8 +1221,9 @@ export function PageComparables({ comparables, reperes, numero }) {
       ) : (
         <>
           <p className="text-[0.82rem] leading-relaxed text-marine/60">
-            Les biens de même nature vendus le plus près du vôtre. Ce sont ces ventes, et non un
-            barème, qui portent l’estimation.
+            Les ventes retenues pour établir l’estimation — celles-là mêmes, et non un relevé de
+            voisinage fait à part. Chacune est pondérée selon sa distance, sa ressemblance au bien
+            et son ancienneté.
           </p>
 
           <Section className="mt-6">
@@ -1232,9 +1233,16 @@ export function PageComparables({ comparables, reperes, numero }) {
                   { label: 'Bien' },
                   { label: 'Distance', droite: true },
                   { label: 'Surface', droite: true },
-                  { label: 'Pièces', droite: true },
+                  { label: 'Terrain', droite: true },
                   { label: 'Prix', droite: true },
                   { label: '€/m²', droite: true },
+                  // Le prix au m² ramené au dernier semestre publié : c'est lui
+                  // qui entre dans la médiane, et il diffère du brut d'autant
+                  // que la vente est ancienne.
+                  { label: '€/m² act.', droite: true },
+                  // Ressemblance en surface et en terrain, sur 100, hors
+                  // distance et hors ancienneté.
+                  { label: 'Sim.', droite: true },
                   { label: 'Date', droite: true },
                   { label: '' },
                 ]}
@@ -1251,9 +1259,16 @@ export function PageComparables({ comparables, reperes, numero }) {
                       <CelluleModifiable cle={`${vente.cle}.type`} valeur={vente.type} />
                       <CelluleModifiable cle={`${vente.cle}.distance`} valeur={vente.distance} droite />
                       <CelluleModifiable cle={`${vente.cle}.surface`} valeur={vente.surface} droite />
-                      <CelluleModifiable cle={`${vente.cle}.pieces`} valeur={vente.pieces} droite />
+                      <CelluleModifiable cle={`${vente.cle}.terrain`} valeur={vente.terrain} droite />
                       <CelluleModifiable cle={`${vente.cle}.prix`} valeur={vente.prix} droite fort />
                       <CelluleModifiable cle={`${vente.cle}.prixM2`} valeur={vente.prixM2} droite />
+                      <CelluleModifiable
+                        cle={`${vente.cle}.prixM2Actualise`}
+                        valeur={vente.prixM2Actualise}
+                        droite
+                        fort
+                      />
+                      <CelluleModifiable cle={`${vente.cle}.similarite`} valeur={vente.similarite} droite />
                       <CelluleModifiable cle={`${vente.cle}.date`} valeur={vente.date} droite />
                       <td className="py-[0.42rem] pl-2 text-right">
                         <OutilLigne
@@ -1276,7 +1291,11 @@ export function PageComparables({ comparables, reperes, numero }) {
 
           <p className="mt-5 text-[0.7rem] leading-relaxed text-marine/45">
             Les distances sont calculées depuis le bien estimé. Les prix sont ceux effectivement
-            enregistrés à l’acte, frais de notaire exclus.
+            enregistrés à l’acte, frais de notaire exclus. La colonne « €/m² act. » ramène ce prix
+            au semestre le plus récent publié, selon l’évolution du marché local — c’est cette
+            valeur qui entre dans l’estimation. « Sim. » note de 0 à 100 la ressemblance au bien
+            estimé, en surface et en terrain. « nc » signale un terrain non renseigné au registre,
+            ce qui ne présume pas de son absence.
           </p>
 
           <p className="mt-auto pt-5 font-mono text-[0.52rem] uppercase tracking-micro text-marine/30">
@@ -1334,6 +1353,22 @@ export function PageEstimation({ estimation, marche, numero }) {
             <Statistique cle="estimation.bas" label="Fourchette basse" valeur={estimation.bas} />
             <Statistique cle="estimation.haut" label="Fourchette haute" valeur={estimation.haut} accent />
           </div>
+
+          {/* D'où vient la largeur de la fourchette. Elle n'est plus la même
+              pour tous les biens : ± 15 % quand des ventes vraiment comparables
+              ont été trouvées à proximité immédiate, ± 25 % quand il a fallu
+              élargir faute de points de comparaison. Une fourchette large sans
+              explication passerait pour une imprécision du rapport, là où c'est
+              une information sur le secteur — et l'agent doit pouvoir la dire. */}
+          {estimation.motifFourchette ? (
+            <ChampModifiable
+              cle="estimation.motifFourchette"
+              valeur={estimation.motifFourchette}
+              as="p"
+              multiligne
+              className="mt-2.5 block text-[0.7rem] leading-relaxed text-marine/45"
+            />
+          ) : null}
 
           {/* Ce qui a écarté le montant de la médiane du secteur, ligne à
               ligne. La section n'apparaît que s'il y a quelque chose à

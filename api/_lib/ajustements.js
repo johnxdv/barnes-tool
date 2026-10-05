@@ -74,30 +74,23 @@ export const COEF_CLASSE_ENERGIE = {
   G: -0.08,
 }
 
-/**
- * Étage — appartements seulement, et le formulaire ne pose la question qu'à
- * eux (voir `EstimationCharacteristicsStep`).
- *
- * L'échelle n'est pas linéaire et ne peut pas l'être : ce qui se paie n'est pas
- * la hauteur mais ce qu'elle apporte — l'absence de vis-à-vis, le calme, la
- * lumière. Le rez-de-chaussée les perd tous les trois d'un coup et se décote
- * franchement ; le premier reste en retrait ; les deuxième et troisième sont la
- * référence, l'étage du bien médian que porte déjà la médiane DVF. Au-dessus,
- * la prime existe mais se tasse vite : entre un sixième et un neuvième étage,
- * l'acquéreur ne distingue plus grand-chose.
- *
- * Un étage élevé sans ascenseur se décoterait, lui, au lieu de se valoriser —
- * mais le formulaire ne recueille pas la présence d'un ascenseur, et la
- * supposer serait décider à la place de l'agent. Le barème retient donc
- * l'hypothèse majoritaire du parc collectif de plus de trois niveaux.
- */
-export function coefEtage(etage) {
-  if (etage === 0) return -0.04
-  if (etage === 1) return -0.01
-  if (etage <= 3) return 0
-  if (etage <= 5) return 0.02
-  return 0.03
-}
+// L'ÉTAGE N'EST PLUS AJUSTÉ ICI, et c'est délibéré.
+//
+// Ce module a porté un `coefEtage` (rez-de-chaussée −4 %, 1er −1 %, 2e–3e nuls,
+// 4e–5e +2 %, au-delà +3 %). Il a été retiré au portage du moteur d'Immovia,
+// qui applique le sien — `coefficientEtage`, dans `src/lib/etage.js`, à
+// l'intérieur même du calcul (voir `moteur.js`, `partBati`). Les garder tous les
+// deux aurait décoté un rez-de-chaussée deux fois, de −4 % ici et de −5 % là.
+//
+// C'est le barème du moteur qui reste, pour deux raisons. La première est qu'il
+// a été mesuré : il sort du banc de test d'Immovia, sur trois mille ventes,
+// quand celui-ci n'avait jamais été validé contre quoi que ce soit. La seconde
+// est que la parité avec Immovia est l'objet du portage — laisser Barnes
+// corriger l'étage autrement aurait fait diverger les deux moteurs sur **tous**
+// les appartements, silencieusement, puisque aucune maison ne l'aurait montré.
+//
+// Ce qui subsiste ici est ce que le moteur ne sait pas : ce que le formulaire
+// déclare et qu'aucune base ne publie.
 
 /**
  * Standing — la prestation de l'immeuble ou de la construction, à distinguer de
@@ -202,20 +195,8 @@ export function ajustementsPrix(characteristics) {
     })
   }
 
-  // L'étage n'est retenu qu'en appartement : le formulaire l'efface au
-  // changement de type, mais une requête forgée — ou un état hérité d'un
-  // parcours précédent — pourrait encore en porter un sur une maison.
-  const etage = Number(c.etage)
-  if (c.typeBien === 'appartement' && Number.isInteger(etage) && etage >= 0) {
-    const coefficient = coefEtage(etage)
-    if (coefficient !== 0) {
-      details.push({
-        id: 'etage',
-        label: etage === 0 ? 'Rez-de-chaussée' : etage === 1 ? '1er étage' : `${etage}e étage`,
-        coefficient,
-      })
-    }
-  }
+  // Pas de ligne « étage » : le moteur l'applique lui-même, en amont de cette
+  // couche. Voir le commentaire en tête de fichier.
 
   const standing = COEF_STANDING[c.standing]
   if (standing != null && standing !== 0) {

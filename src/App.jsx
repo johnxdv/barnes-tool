@@ -10,6 +10,7 @@ import { RapportView } from './components/rapport/RapportView'
 // restitue le montant sur sa page « Estimation de valeur ». Le fichier est
 // conservé — c'est le seul écran du parcours à recueillir des coordonnées, et
 // rien ne l'a remplacé sur ce point.
+import { EstimationIndisponibleStep } from './components/estimation/EstimationIndisponibleStep'
 import { AUCUN_AJUSTEMENT, AUCUNE_DETECTION, requestEstimation } from './lib/estimation'
 import { RAPPORT_VIDE, requestRapport } from './lib/rapport'
 
@@ -25,6 +26,9 @@ import { RAPPORT_VIDE, requestRapport } from './lib/rapport'
  * « Estimation de valeur ».
  */
 const STAGES = ['adresse', 'batiment', 'analyse', 'caracteristiques', 'assemblage']
+
+/** Fourchette absente — même forme que celle du serveur, bornes nulles. */
+const AUCUNE_FOURCHETTE = { low: null, high: null, confiance: null }
 
 /**
  * Outil d'estimation — parcours en écrans successifs dans une même page (aucune
@@ -67,6 +71,20 @@ export default function App() {
   // celui-là qui part au rapport (voir `saveCharacteristics`). Aucun écran ne
   // l'affiche avant.
   const [price, setPrice] = useState(null)
+  // Fourchette et niveau de confiance, tels que le moteur les a établis. Ils
+  // descendent du serveur depuis le portage : la fourchette n'est plus un
+  // pourcentage fixe posé au moment de l'affichage, elle vaut ±15 % en confiance
+  // normale, ±20 % en moyenne, ±25 % en faible. Le front ne la recalcule plus.
+  const [fourchette, setFourchette] = useState(AUCUNE_FOURCHETTE)
+  // Les ventes que le moteur a retenues et pondérées pour établir le prix —
+  // celles-là mêmes, et non un relevé de voisinage fait à part. Elles portent
+  // leur distance, leur €/m² actualisé, leur poids et leur score de similarité,
+  // et c'est la page « ventes comparables » du rapport qui les met en page.
+  const [comparables, setComparables] = useState([])
+  // Motif d'indisponibilité, quand le calcul n'a pas pu aboutir pour une raison
+  // technique — source DVF injoignable, budget dépassé. `null` le reste du
+  // temps. C'est lui qui fait basculer le parcours sur `EstimationIndisponibleStep`.
+  const [indisponible, setIndisponible] = useState(null)
   // Caractéristiques que les bases connaissaient déjà du bien — type et classe
   // énergie — rapportées par le même appel que le montant. Elles arrivent donc
   // avant que le formulaire de caractéristiques s'affiche, ce qui est la seule
@@ -74,11 +92,12 @@ export default function App() {
   // qui est déjà su.
   const [detection, setDetection] = useState(AUCUNE_DETECTION)
   // Détail des ajustements que les caractéristiques déclarées ont fait jouer
-  // sur le prix — état général, classe énergie, standing, étage, piscine,
-  // stationnements. Vide jusqu'à la validation du formulaire, qui est le
-  // premier appel à les connaître. Le rapport les imprime sous le montant : sans eux, deux biens
-  // voisins estimés à des prix différents n'auraient aucune explication à
-  // présenter au vendeur.
+  // sur le prix — état général, classe énergie, standing, piscine,
+  // stationnements. L'étage n'y figure plus : le moteur l'applique lui-même,
+  // en amont de cette couche. Vide jusqu'à la validation du formulaire, qui est
+  // le premier appel à les connaître. Le rapport les imprime sous le montant :
+  // sans eux, deux biens voisins estimés à des prix différents n'auraient
+  // aucune explication à présenter au vendeur.
   const [ajustements, setAjustements] = useState(AUCUN_AJUSTEMENT)
   // Caractéristiques détaillées saisies à l'étape `caracteristiques`. Les
   // champs laissés de côté y valent `null` — à distinguer d'un zéro déclaré au
@@ -116,6 +135,9 @@ export default function App() {
     (confirmedSelection) => {
       setSelection(confirmedSelection)
       setPrice(null)
+      setFourchette(AUCUNE_FOURCHETTE)
+      setComparables([])
+      setIndisponible(null)
       setDetection(AUCUNE_DETECTION)
       setAjustements(AUCUN_AJUSTEMENT)
       pendingEstimate.current = requestEstimation(confirmedSelection)
@@ -155,7 +177,7 @@ export default function App() {
   //
   // Le calcul est relancé dans tous les cas, surface déclarée ou non : le
   // formulaire porte désormais des caractéristiques qui pèsent sur le prix —
-  // état général, classe énergie, standing, étage, piscine, stationnements
+  // état général, classe énergie, standing, piscine, stationnements
   // (voir `api/_lib/ajustements.js`) —, et la charge utile n'est donc plus jamais
   // identique à celle de l'analyse. Un curseur de surface laissé au repos
   // n'empêche plus un état « à rénover » de se voir.
@@ -183,8 +205,34 @@ export default function App() {
       const estimation = await requestEstimation({ ...selection, surfaceM2, characteristics: values })
       const recalcule = estimation?.price ?? price
 
+      // Panne technique **et** aucun montant à présenter, pas même celui de
+      // l'analyse : le parcours s'arrête sur la page d'indisponibilité plutôt
+      // que d'aboutir à un rapport dont la page « Estimation de valeur » serait
+      // muette. C'est le renversement qu'apporte le portage du moteur — voir
+      // `EstimationIndisponibleStep`.
+      //
+      // Le montant de l'analyse, s'il existe, l'emporte : il a été calculé, lui,
+      // et un rapport avec un prix approché vaut mieux qu'un parcours perdu.
+      if (estimation?.indisponible?.rejouable && recalcule == null) {
+        setIndisponible(estimation.indisponible)
+        return goToStep('indisponible')
+      }
+
       setPrice(recalcule)
+      setIndisponible(null)
       setAjustements(estimation?.price == null ? AUCUN_AJUSTEMENT : estimation.ajustements)
+
+      // La fourchette et les comparables ne survivent pas non plus à un montant
+      // manquant : ils décrivent un calcul qui n'a pas abouti. Conservés du
+      // premier appel, ils prétendraient border un prix qu'ils n'ont pas produit.
+      if (estimation?.price != null) {
+        setFourchette({
+          low: estimation.low,
+          high: estimation.high,
+          confiance: estimation.confiance,
+        })
+        setComparables(estimation.comparables ?? [])
+      }
 
       // `requestRapport` ne rejette jamais : un échec complet rend un rapport
       // vide, dont les pages de secteur s'affichent en attente de saisie.
@@ -195,11 +243,23 @@ export default function App() {
     [goToStep, selection, address, price],
   )
 
+  // Nouvelle tentative depuis la page d'indisponibilité. La sélection et le
+  // formulaire sont conservés : rien n'est à refaire, ni sur la carte ni à la
+  // saisie — on repart de l'écran d'assemblage, qui relance les deux appels.
+  const retryEstimation = useCallback(() => {
+    if (!characteristics) return goToStep('caracteristiques')
+    setIndisponible(null)
+    saveCharacteristics(characteristics)
+  }, [characteristics, saveCharacteristics, goToStep])
+
   // Repart de l'étape adresse pour une nouvelle estimation.
   const restart = useCallback(() => {
     setAddress(null)
     setSelection(null)
     setPrice(null)
+    setFourchette(AUCUNE_FOURCHETTE)
+    setComparables([])
+    setIndisponible(null)
     setDetection(AUCUNE_DETECTION)
     setAjustements(AUCUN_AJUSTEMENT)
     setCharacteristics(null)
@@ -215,11 +275,16 @@ export default function App() {
     import('./components/estimation/BuildingMap')
   }, [step])
 
-  const stageIndex = STAGES.indexOf(step)
+  // La page d'indisponibilité ne figure pas dans les étapes — c'est une sortie,
+  // pas une marche de plus. La barre y garde l'avancement de l'assemblage, d'où
+  // le parcours vient et où il repartira : la ramener à zéro dirait que tout est
+  // à refaire, et `indexOf` seul la rendrait négative.
+  const etapeCourante = step === 'indisponible' ? 'assemblage' : step
+  const stageIndex = STAGES.indexOf(etapeCourante)
   const globalPct =
     step === 'rapport'
       ? 100
-      : Math.round(((stageIndex + stageProgress) / STAGES.length) * 100)
+      : Math.round(((Math.max(stageIndex, 0) + stageProgress) / STAGES.length) * 100)
 
 
   return (
@@ -306,11 +371,24 @@ export default function App() {
               <EstimationRapportStep pret={rapport !== null} onDone={() => goToStep('rapport')} />
             ) : null}
 
+            {/* Panne technique du moteur, sans montant à présenter. Le bouton
+                relance les deux appels sur la sélection et le formulaire déjà
+                en main : rien n'est à refaire. */}
+            {step === 'indisponible' ? (
+              <EstimationIndisponibleStep
+                address={address}
+                onRetry={retryEstimation}
+                onBack={() => goToStep('batiment')}
+              />
+            ) : null}
+
             {step === 'rapport' ? (
               <RapportView
                 address={address}
                 selection={selection}
                 price={price}
+                fourchette={fourchette}
+                comparables={comparables}
                 ajustements={ajustements}
                 characteristics={characteristics}
                 // Un assemblage qui n'aurait pas abouti laisse `rapport` à
