@@ -51,31 +51,14 @@ export function RapportView({
   address,
   selection,
   price,
-  // Bornes et niveau de confiance établis par le moteur. Le rapport ne les
-  // recalcule pas : leur largeur dit quelque chose du calcul — ±15 % quand cinq
-  // à huit ventes similaires ont été trouvées à moins de 500 m, ±25 % quand il a
-  // fallu relâcher la fenêtre de surface — et le front n'a pas de quoi le savoir.
-  fourchette,
-  // Les ventes retenues par le moteur, celles qui portent le montant.
-  comparables,
   ajustements,
   characteristics,
   rapport,
   onRestart,
 }) {
   const modele = useMemo(
-    () =>
-      construireModele({
-        address,
-        selection,
-        price,
-        fourchette,
-        comparables,
-        ajustements,
-        characteristics,
-        rapport,
-      }),
-    [address, selection, price, fourchette, comparables, ajustements, characteristics, rapport],
+    () => construireModele({ address, selection, price, ajustements, characteristics, rapport }),
+    [address, selection, price, ajustements, characteristics, rapport],
   )
 
   /**
