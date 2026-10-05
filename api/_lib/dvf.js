@@ -18,12 +18,35 @@ const gunzipAsync = promisify(gunzip)
 const BASE_URL = 'https://files.data.gouv.fr/geo-dvf/latest/csv'
 
 /**
- * Au-delà, le téléchargement d'une année coûterait plus qu'il ne rapporte : les
- * autres millésimes portent déjà l'estimation, et le budget de l'analyse est
- * mieux employé ailleurs. Le millésime abandonné n'est pas mis en cache — la
- * prochaine estimation dans le secteur retentera sa chance.
+ * Délai maximal d'un millésime, **lecture du corps comprise**.
+ *
+ * Il valait 4 s, et c'était la panne la plus coûteuse du moteur. `AbortSignal`
+ * ne couvre pas seulement la requête : il tue aussi le flux de la réponse. Or
+ * les en-têtes d'un fichier DVF arrivent en trois dixièmes de seconde, quand le
+ * corps — deux à trois mégaoctets compressés — met entre deux et dix secondes à
+ * descendre. Le téléchargement était donc interrompu en plein milieu, après que
+ * `response.ok` eut été vrai, et le millésime repartait en tableau vide.
+ *
+ * La conséquence ne se voyait nulle part : l'échantillon se retrouvait tiré
+ * d'une seule année au lieu de quatre, et la médiane sautait de plusieurs
+ * centaines d'euros au mètre carré d'un appel à l'autre. Sur une maison de
+ * Mollégès, le même bien a rendu 759 000, 1 242 000, 1 277 000 et 1 286 000 €
+ * selon les millésimes qui avaient eu le temps d'arriver.
+ *
+ * Trente secondes laissent le plus lent des millésimes observés (9,8 s) finir
+ * avec une marge large, réessais compris, dans la minute que `vercel.json`
+ * accorde à la fonction.
  */
-const FETCH_TIMEOUT_MS = 4000
+const FETCH_TIMEOUT_MS = 30000
+
+/**
+ * Nombre de tentatives par millésime avant d'abandonner.
+ *
+ * Un échec n'est plus absorbé : après trois essais, le chargement lève. Mieux
+ * vaut une estimation qui s'arrête qu'une estimation calculée sur un historique
+ * amputé dont personne ne saura jamais qu'il l'était.
+ */
+const TENTATIVES = 3
 
 /**
  * Colonnes exploitées, repérées par leur nom dans l'en-tête plutôt que par
@@ -280,12 +303,38 @@ function cacheSet(key, sales) {
 }
 
 /**
+ * Millésime DVF introuvable après tous les réessais.
+ *
+ * Porte sa propre classe pour que l'appelant puisse la distinguer d'une panne
+ * quelconque : c'est elle qui doit interrompre l'estimation plutôt que la laisser
+ * se replier en silence sur un repère statistique.
+ */
+export class DvfIndisponible extends Error {
+  constructor(key, cause) {
+    super(`DVF ${key} introuvable après ${TENTATIVES} tentatives`)
+    this.name = 'DvfIndisponible'
+    this.key = key
+    this.cause = cause
+  }
+}
+
+/**
  * Ventes d'un département pour une année donnée.
  *
- * Renvoie un tableau vide — jamais une erreur — quand l'année n'est pas
- * publiée, que le département n'est pas couvert (Alsace-Moselle, voir
- * `reference.js`) ou que le réseau flanche : une année manquante ne doit
- * jamais faire échouer l'estimation, les autres suffisent à la porter.
+ * Deux sorties, et deux seulement. Un **tableau** quand le millésime a été lu en
+ * entier, ou quand il n'est pas publié (404) — ce qui est une réponse, pas une
+ * panne : l'année en cours manque toujours plusieurs mois durant, et
+ * l'Alsace-Moselle n'entrera jamais dans DVF (voir `reference.js`). Une
+ * **exception** `DvfIndisponible` quand la source n'a pas répondu après
+ * `TENTATIVES` essais.
+ *
+ * Ce qu'elle ne fait plus : rendre un tableau vide sur un réseau qui flanche.
+ * C'était indiscernable d'un département sans ventes, et l'estimation continuait
+ * sur un historique amputé sans que rien ne le signale.
+ *
+ * **Seules les lectures complètes sont mises en cache.** Mettre un échec en
+ * cache l'aurait figé pour six heures, et toutes les estimations du secteur
+ * auraient hérité d'une panne de quelques secondes.
  */
 export async function loadDepartementYear(departement, year, { signal } = {}) {
   const key = `${departement}:${year}`
@@ -293,27 +342,47 @@ export async function loadDepartementYear(departement, year, { signal } = {}) {
   if (cached) return cached
 
   const url = `${BASE_URL}/${year}/departements/${departement}.csv.gz`
-  const timeout = AbortSignal.timeout(FETCH_TIMEOUT_MS)
-  const composed = signal ? AbortSignal.any([signal, timeout]) : timeout
+  let derniere = null
 
-  try {
-    const response = await fetch(url, { signal: composed })
-    if (!response.ok) {
-      // 404 = millésime non publié ou département hors couverture DVF.
-      cacheSet(key, [])
-      return []
+  for (let essai = 1; essai <= TENTATIVES; essai += 1) {
+    // Un signal neuf à chaque tentative : réutiliser le précédent, déjà
+    // déclenché, ferait échouer la suivante avant même qu'elle parte.
+    const timeout = AbortSignal.timeout(FETCH_TIMEOUT_MS)
+    const composed = signal ? AbortSignal.any([signal, timeout]) : timeout
+
+    try {
+      const response = await fetch(url, { signal: composed })
+
+      // 404 = millésime non publié, ou département hors couverture DVF. C'est
+      // une réponse de la source, pas une panne : on la retient telle quelle.
+      if (response.status === 404) {
+        cacheSet(key, [])
+        return []
+      }
+
+      if (!response.ok) {
+        derniere = new Error(`réponse ${response.status}`)
+        continue
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer())
+      const csv = (await gunzipAsync(buffer)).toString('utf8')
+      const sales = parseDvfCsv(csv)
+
+      cacheSet(key, sales)
+      return sales
+    } catch (error) {
+      // Annulation venue de l'appelant : on la relaie sans la compter comme un
+      // échec de la source, et sans réessayer — le budget global a parlé.
+      if (signal?.aborted) throw error
+
+      derniere = error
+      console.error(
+        `[estimation] DVF ${key} — tentative ${essai}/${TENTATIVES} en échec :`,
+        error?.message ?? error,
+      )
     }
-
-    const buffer = Buffer.from(await response.arrayBuffer())
-    const csv = (await gunzipAsync(buffer)).toString('utf8')
-    const sales = parseDvfCsv(csv)
-
-    cacheSet(key, sales)
-    return sales
-  } catch (error) {
-    if (signal?.aborted) throw error
-    // Réseau, décompression, en-tête inattendu : on repart sans cette année.
-    console.error(`[estimation] DVF ${key} indisponible —`, error?.message ?? error)
-    return []
   }
+
+  throw new DvfIndisponible(key, derniere)
 }

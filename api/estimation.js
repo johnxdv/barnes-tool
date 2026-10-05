@@ -31,6 +31,7 @@
 import { ajustementsPrix } from './_lib/ajustements.js'
 import { describeBien } from './_lib/bien.js'
 import { departementPricePerM2, findComparables } from './_lib/comparables.js'
+import { DvfIndisponible } from './_lib/dvf.js'
 import { communeAtPoint, departementFromInsee } from './_lib/geo.js'
 import { estLivreFoncier, prixLivreFoncier } from './_lib/alsaceMoselle.js'
 import { estHorsCouvertureDvf, prixReference } from './_lib/reference.js'
@@ -38,16 +39,26 @@ import { detectPropertyType, estTypeFiable } from '../src/lib/typeBien.js'
 import { MONACO_PRICE_PER_M2 } from '../src/lib/monaco.js'
 
 /**
- * Budgets de temps. L'écran de chargement dure 12 s côté front, et c'est lui
- * qui donne le tempo : le calcul doit rendre la main avant, quitte à rendre un
- * repli plutôt qu'une réponse juste mais en retard.
+ * Budget global du calcul.
  *
- * La recherche DVF a son propre plafond, plus court : elle est de loin l'étape
- * la plus lourde (plusieurs millésimes départementaux à télécharger), et si
- * elle traîne, il reste ainsi le temps de retomber sur un prix de référence.
+ * Il valait 10 s, doublé d'un plafond de 7 s sur la seule étape DVF, et les deux
+ * reposaient sur le même pari : qu'un repli approché valait mieux qu'une réponse
+ * en retard. Le pari était perdant, parce que le repli ne se voyait pas. Les 7 s
+ * expiraient pendant le décodage des quelque 125 000 ventes d'un département, le
+ * calcul basculait sur un barème statistique, et l'écran affichait un montant
+ * que rien ne distinguait d'une vraie comparaison de voisinage.
+ *
+ * Le plafond de l'étape DVF est supprimé : le chargement a désormais son propre
+ * délai par millésime et ses réessais (voir `_lib/dvf.js`), et c'est là que la
+ * question se tranche, fichier par fichier. Le budget global subsiste comme
+ * garde-fou de dernier ressort, porté à 50 s — sous la minute que `vercel.json`
+ * accorde à la fonction, de quoi laisser aboutir six millésimes et leurs
+ * réessais.
+ *
+ * L'écran de chargement du front dure toujours 12 s ; il attend maintenant la
+ * réponse au lieu de lui donner le tempo.
  */
-const BUDGET_MS = 10000
-const DVF_BUDGET_MS = 7000
+const BUDGET_MS = 50000
 
 /**
  * Surfaces de dernier recours, quand aucune base n'a rien à dire du bâtiment
@@ -185,42 +196,35 @@ async function resolvePricePerM2({ lat, lon, type, departement, codeInsee }, { s
   const reference = () => referenceLocale({ codeInsee, departement, type }, { signal })
 
   // Départements sans aucune donnée DVF (Alsace-Moselle, Mayotte) : inutile de
-  // dérouler l'élargissement, il ne trouvera rien.
+  // dérouler l'élargissement, il ne trouvera rien. Le prix de référence y est le
+  // calcul ordinaire, et non un repli.
   if (!departement || estHorsCouvertureDvf(departement)) return reference()
 
-  const deadline = AbortSignal.timeout(DVF_BUDGET_MS)
-  const dvfSignal = signal ? AbortSignal.any([signal, deadline]) : deadline
+  // Plus d'échéance propre à l'étape DVF : le chargement tranche millésime par
+  // millésime, avec son délai et ses réessais (voir `_lib/dvf.js`). Seul le
+  // budget global de l'appel subsiste au-dessus.
+  const comparables = await findComparables({ lat, lon, type, departement }, { signal })
 
-  try {
-    const comparables = await findComparables(
-      { lat, lon, type, departement },
-      { signal: dvfSignal },
-    )
-
-    if (comparables.pricePerM2) {
-      return {
-        pricePerM2: comparables.pricePerM2,
-        source: 'dvf',
-        count: comparables.sales.length,
-        radiusM: comparables.radiusM,
-      }
+  if (comparables.pricePerM2) {
+    return {
+      pricePerM2: comparables.pricePerM2,
+      source: 'dvf',
+      count: comparables.sales.length,
+      radiusM: comparables.radiusM,
     }
+  }
 
-    // Aucune vente comparable, même après élargissement maximal : on retombe
-    // sur la médiane de tout le département.
-    const fallback = await departementPricePerM2(departement, type, { signal: dvfSignal })
-    if (fallback.pricePerM2) {
-      return {
-        pricePerM2: fallback.pricePerM2,
-        source: 'dvf-departement',
-        count: fallback.count,
-        radiusM: null,
-      }
+  // Aucune vente comparable, même après élargissement maximal : on retombe sur
+  // la médiane de tout le département. Ce repli-ci reste légitime — les
+  // millésimes sont bien là, c'est le voisinage qui est muet.
+  const fallback = await departementPricePerM2(departement, type, { signal })
+  if (fallback.pricePerM2) {
+    return {
+      pricePerM2: fallback.pricePerM2,
+      source: 'dvf-departement',
+      count: fallback.count,
+      radiusM: null,
     }
-  } catch (error) {
-    // Échéance dépassée ou source injoignable : le prix de référence prend le
-    // relais. Une estimation approchée vaut mieux qu'un parcours interrompu.
-    console.error('[estimation] Recherche DVF abandonnée —', error?.message ?? error)
   }
 
   return reference()
@@ -423,6 +427,21 @@ export default async function handler(req, res) {
       ...(process.env.ESTIMATION_DEBUG ? { meta } : {}),
     })
   } catch (error) {
+    // Un millésime DVF introuvable après ses trois tentatives : pas de prix.
+    // C'est le renversement que ce correctif apporte — l'ancienne version
+    // retombait ici sur un barème statistique, et le montant qui s'affichait
+    // était indiscernable d'un montant calculé sur des ventes voisines.
+    if (error instanceof DvfIndisponible) {
+      console.error('[estimation] indisponible —', error.message)
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(503).json({
+        ok: false,
+        error: 'Estimation momentanément indisponible.',
+        code: 'dvf-indisponible',
+        motif: error.key,
+      })
+    }
+
     console.error('[estimation] Échec du calcul', error)
     return res.status(500).json({ ok: false, error: 'Estimation indisponible.' })
   } finally {
