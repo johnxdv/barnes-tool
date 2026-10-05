@@ -1347,6 +1347,18 @@ export function PageEstimation({ estimation, marche, numero }) {
                 className="mt-3 block font-mono text-[0.7rem] text-marine/45"
               />
             ) : null}
+
+            {/* Le montant s'entend honoraires inclus. Discret — c'est une
+                précision d'unité, pas un argument — mais présent sous le
+                chiffre qu'il qualifie, et non relégué aux mentions légales. */}
+            {estimation.mentionHonoraires ? (
+              <ChampModifiable
+                cle="estimation.mentionHonoraires"
+                valeur={estimation.mentionHonoraires}
+                as="p"
+                className="mt-2 block text-[0.62rem] text-marine/35"
+              />
+            ) : null}
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
