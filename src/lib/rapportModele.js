@@ -611,28 +611,14 @@ function comparables(liste) {
  * laquelle, et l'agent qui présente le rapport doit pouvoir la défendre ligne à
  * ligne (voir `api/_lib/ajustements.js`).
  */
-/** Ce que chaque niveau de confiance vaut en demi-largeur de fourchette. */
-const DEMI_LARGEUR_PAR_CONFIANCE = { normale: 0.15, moyenne: 0.2, faible: 0.25 }
-
 /**
- * Comment la fourchette a été établie, en une phrase que l'agent peut lire à
- * voix haute.
+ * Ce que chaque niveau de confiance vaut en demi-largeur de fourchette.
  *
- * Elle n'est plus un pourcentage fixe : sa largeur dit quelque chose du calcul
- * qui l'a produite. ±15 % signifie que cinq à huit ventes vraiment comparables
- * ont été trouvées à moins de 500 m ; ±25 %, qu'il a fallu relâcher la fenêtre
- * de surface ou s'éloigner pour réunir un échantillon. Afficher la largeur sans
- * dire d'où elle vient ferait passer un écart plus large pour une imprécision
- * du rapport, là où c'est une information sur le marché.
+ * Ne sert plus qu'au repli de `priceRange`, pour un rapport rouvert depuis un
+ * état qui ne porte pas ses propres bornes. La page n'affiche plus la largeur
+ * ni ce qui l'a décidée.
  */
-const MOTIF_CONFIANCE = {
-  normale:
-    'Fourchette de ± 15 % : des ventes comparables ont été relevées à proximité immédiate du bien.',
-  moyenne:
-    'Fourchette de ± 20 % : les ventes comparables les plus proches ont été relevées à l’échelle du secteur.',
-  faible:
-    'Fourchette de ± 25 % : le bien ou son secteur offrent peu de points de comparaison directs.',
-}
+const DEMI_LARGEUR_PAR_CONFIANCE = { normale: 0.15, moyenne: 0.2, faible: 0.25 }
 
 function estimation({ price, characteristics, ajustements, fourchette: bornes, monaco }) {
   if (price == null) return null
@@ -658,30 +644,19 @@ function estimation({ price, characteristics, ajustements, fourchette: bornes, m
     bas: formatEuros(fourchette?.low),
     haut: formatEuros(fourchette?.high),
     confiance,
-    // Absent à Monaco, dont la fourchette relève d'un barème et non d'un
-    // échantillon de ventes.
-    motifFourchette: monaco ? null : (MOTIF_CONFIANCE[confiance] ?? null),
     prixM2: surface > 0 ? parM2(price / surface) : null,
-    // Le montant affiché est un prix de présentation, honoraires d'agence
-    // inclus — DVF, dont il dérive, publie des valeurs foncières nettes vendeur
-    // (voir `api/_lib/presentation.js`). La mention est discrète mais elle y
-    // est : un prix dont on ne sait pas s'il s'entend FAI ou net vendeur n'est
-    // pas un prix, et c'est la première question que pose un vendeur averti.
-    mentionHonoraires: 'Honoraires d’agence inclus.',
     surface: formatSurfaceOuNull(surface),
-    // Liste vide quand le formulaire n'a rien déclaré qui pèse sur le prix :
-    // la page n'affiche alors pas la section, plutôt qu'un tableau vide qui
-    // laisserait croire à un relevé manquant.
-    ajustements: details.map((detail) => ({
-      cle: `estimation.ajustement.${detail.id}`,
+    // Les critères que l'avis de valeur a pris en compte — nommés, jamais
+    // chiffrés. Le rapport dit ce qui a été considéré ; il n'expose ni le
+    // barème de la maison ni le détail du calcul, qui sont internes.
+    //
+    // Liste vide quand le formulaire n'a rien déclaré de déterminant : la page
+    // n'affiche alors pas la section, plutôt qu'une liste vide qui se lirait
+    // comme un relevé manquant.
+    criteres: details.map((detail) => ({
+      cle: `estimation.critere.${detail.id}`,
       label: detail.label,
-      valeur: formatPct(detail.coefficient * 100),
     })),
-    ajustementTotal: details.length > 0 ? formatPct((ajustements?.coefficient ?? 0) * 100) : null,
-    // Le plafond a-t-il mordu ? La page le dit en toutes lettres : un total qui
-    // ne fait pas la somme de ses lignes, sans explication, passerait pour une
-    // erreur de calcul.
-    ajustementPlafonne: ajustements?.plafonne === true,
   }
 }
 
