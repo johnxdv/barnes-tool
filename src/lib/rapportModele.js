@@ -662,12 +662,6 @@ function estimation({ price, characteristics, ajustements, fourchette: bornes, m
     // échantillon de ventes.
     motifFourchette: monaco ? null : (MOTIF_CONFIANCE[confiance] ?? null),
     prixM2: surface > 0 ? parM2(price / surface) : null,
-    // Le montant affiché est un prix de présentation, honoraires d'agence
-    // inclus — DVF, dont il dérive, publie des valeurs foncières nettes vendeur
-    // (voir `api/_lib/presentation.js`). La mention est discrète mais elle y
-    // est : un prix dont on ne sait pas s'il s'entend FAI ou net vendeur n'est
-    // pas un prix, et c'est la première question que pose un vendeur averti.
-    mentionHonoraires: 'Honoraires d’agence inclus.',
     surface: formatSurfaceOuNull(surface),
     // Liste vide quand le formulaire n'a rien déclaré qui pèse sur le prix :
     // la page n'affiche alors pas la section, plutôt qu'un tableau vide qui

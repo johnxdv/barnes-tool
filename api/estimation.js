@@ -72,7 +72,6 @@ import { communeAtPoint, departementFromInsee } from './_lib/geo.js'
 import { estLivreFoncier, prixLivreFoncier } from './_lib/alsaceMoselle.js'
 import { estHorsCouvertureDvf, prixReference } from './_lib/reference.js'
 import { detectPropertyType, estTypeFiable } from '../src/lib/typeBien.js'
-import { prixDePresentation } from './_lib/presentation.js'
 import { coefficientEtage, normaliseEtage } from '../src/lib/etage.js'
 import { MONACO_PRICE_PER_M2, MONACO_RANGE_PCT } from '../src/lib/monaco.js'
 
@@ -340,10 +339,9 @@ export default async function handler(req, res) {
     // français (20 M€) écrêterait une villa monégasque de grande surface sur un
     // montant qui, lui, n'a rien d'aberrant. L'ajustement est lui-même plafonné
     // à ±15 %, il ne peut pas en sortir.
-    const netVendeur = round(
+    const price = round(
       MONACO_PRICE_PER_M2 * surfaceM2 * coefficientEtageMonaco * (1 + ajustements.coefficient),
     )
-    const price = prixDePresentation(netVendeur)
 
     // Monaco garde sa fourchette symétrique : elle ne relève pas du barème par
     // confiance, qui suppose des ventes voisines et un niveau de confiance tiré
@@ -363,7 +361,6 @@ export default async function handler(req, res) {
       surfaceSource: declaree ? 'declaree' : 'defaut',
       etage: etageMonaco,
       coefficientEtage: coefficientEtageMonaco,
-      prixNetVendeur: netVendeur,
       pricePerM2: MONACO_PRICE_PER_M2,
       source: 'monaco-imsee',
       confiance: 'moyenne',
@@ -507,12 +504,11 @@ export default async function handler(req, res) {
       // de la même façon qu'ailleurs.
       const coefficientEtageApplique = coefficientEtage(etage)
 
-      const netVendeur = clampPrice(
+      const price = clampPrice(
         round(
           prix.pricePerM2 * surfaceM2 * coefficientEtageApplique * (1 + ajustements.coefficient),
         ),
       )
-      const price = prixDePresentation(netVendeur)
 
       // Aucune vente ne porte ce montant : il sort d'un repère statistique, et
       // la confiance la plus basse est la seule honnête. La fourchette suit —
@@ -543,7 +539,6 @@ export default async function handler(req, res) {
         prixAvantAjustements: Math.round(
           prix.pricePerM2 * surfaceM2 * coefficientEtageApplique,
         ),
-        prixNetVendeur: netVendeur,
         elapsedMs: Date.now() - startedAt,
       }
 
@@ -622,13 +617,7 @@ export default async function handler(req, res) {
     // que le portage impose : le moteur établit ce que vaut le bien moyen du
     // secteur à cette surface et à ce terrain, les caractéristiques déclarées
     // l'en écartent ensuite.
-    const netVendeur = clampPrice(round(marche.prix * (1 + ajustements.coefficient)))
-
-    // Puis, en tout dernier, le passage au prix de présentation honoraires
-    // inclus (voir `_lib/presentation.js`). La fourchette est calculée **après**,
-    // autour du montant majoré : elle reste ainsi centrée sur le prix affiché et
-    // garde la demi-largeur que la confiance commande.
-    const price = prixDePresentation(netVendeur)
+    const price = clampPrice(round(marche.prix * (1 + ajustements.coefficient)))
     const { low, high, demiLargeurPct } = fourchetteAutour(price, marche.confiance)
 
     // Chaque comparable retenu, avec de quoi refaire le calcul à la main. Ce
@@ -719,10 +708,6 @@ export default async function handler(req, res) {
       // raison qu'on peut nommer.
       ajustements: traceAjustements(ajustements),
       prixAvantAjustements: marche.prix,
-      // Le net vendeur, à côté du prix de présentation affiché : c'est l'écart
-      // entre les deux qui permet de vérifier la majoration d'honoraires, et de
-      // rapprocher le montant du registre DVF sur lequel il est bâti.
-      prixNetVendeur: netVendeur,
 
       chargement: {
         departements,
