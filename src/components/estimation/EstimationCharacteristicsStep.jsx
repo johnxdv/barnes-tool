@@ -15,6 +15,7 @@ import {
   PiscineIllustration,
   SalleEauIllustration,
   SdbIllustration,
+  AscenseurIllustration,
   CaveIllustration,
   JardinIllustration,
   RooftopIllustration,
@@ -205,6 +206,7 @@ const VALEURS_VIDES = {
   nombreNiveaux: null,
   etatGeneral: null,
   piscine: null,
+  ascenseur: null,
   stationnementsExterieurs: null,
   stationnementsInterieurs: null,
   // Seul champ à ne pas valoir `null` au départ : une liste vide de photos ne
@@ -569,6 +571,20 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
               onChange={set('piscine')}
               illustration={<PiscineIllustration active={values.piscine === true} />}
             />
+
+            {/* La desserte ne concerne que le collectif, et elle ne se chiffre
+                qu'avec l'étage : les deux champs vivent donc sous la même
+                condition, et le barème (voir `api/_lib/ajustements.js`) ne
+                retient l'ascenseur qu'une fois l'étage connu. */}
+            {values.typeBien === 'appartement' ? (
+              <ToggleField
+                key="ascenseur"
+                label="Ascenseur"
+                value={values.ascenseur}
+                onChange={set('ascenseur')}
+                illustration={<AscenseurIllustration active={values.ascenseur === true} />}
+              />
+            ) : null}
 
             <DualStepperField
               key="stationnements"

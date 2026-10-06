@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 /**
  * Illustrations animées des champs chiffrés du formulaire de caractéristiques.
@@ -865,14 +865,98 @@ function Etage({ index, y, fillOpacity }) {
  */
 const NIVEAUX_PLAFOND_DESSIN = 10
 
-/** Un nuage, puis deux, puis trois, à mesure qu'on s'élève vers vingt. */
-function Nuage({ x, y, scale = 1 }) {
+/**
+ * Un nuage. Trois lobes, dont les rayons varient avec `scale` — deux nuages de
+ * tailles différentes ne doivent pas se lire comme le même dessin agrandi.
+ */
+function Nuage({ scale = 1, opacity = 0.14 }) {
   return (
-    <g transform={`translate(${x} ${y}) scale(${scale})`}>
-      <ellipse cx="0" cy="0" rx="9" ry="4.2" fill="#3C3C3C" fillOpacity="0.14" />
-      <ellipse cx="-5.5" cy="1.2" rx="6" ry="3.4" fill="#3C3C3C" fillOpacity="0.12" />
-      <ellipse cx="5.5" cy="1.4" rx="6.5" ry="3.2" fill="#3C3C3C" fillOpacity="0.12" />
+    <g transform={`scale(${scale})`}>
+      <ellipse cx="0" cy="0" rx="9" ry="4.2" fill="#3C3C3C" fillOpacity={opacity} />
+      <ellipse cx="-5.5" cy="1.2" rx="6" ry="3.4" fill="#3C3C3C" fillOpacity={opacity * 0.85} />
+      <ellipse cx="5.5" cy="1.4" rx="6.5" ry="3.2" fill="#3C3C3C" fillOpacity={opacity * 0.85} />
     </g>
+  )
+}
+
+/**
+ * La couche de nuages, du onzième au vingtième niveau.
+ *
+ * DEUX NUAGES PAR NIVEAU, et c'est ce qui fait la différence avec la première
+ * version : à onze niveaux la couche s'amorce, à vingt elle est fournie. Un
+ * nuage de plus à chaque cran, c'était trop peu pour qu'on voie le curseur
+ * répondre — et c'est tout ce qu'on lui demande une fois l'immeuble figé.
+ *
+ * Les positions sont **fixes et pré-tirées**, jamais aléatoires au rendu : un
+ * `Math.random()` ici redistribuerait toute la couche à chaque frappe, et le
+ * ciel scintillerait au lieu de se remplir. L'ordre de la table est l'ordre
+ * d'apparition — on remplit d'abord près du toit, puis vers le haut et les
+ * bords, de sorte que la couche pousse depuis l'immeuble plutôt que de se poser
+ * d'un bloc.
+ *
+ * `derive` est la seconde moitié de l'effet : chaque nuage glisse de quelques
+ * unités, lentement et en boucle, sur une durée et un retard qui lui sont
+ * propres. Rien ne se synchronise, et c'est ce décalage qui donne la
+ * profondeur — des nuages qui dériveraient ensemble se liraient comme un seul
+ * calque qui bouge.
+ */
+const CIEL = [
+  { x: 92, y: -8, scale: 0.85, opacity: 0.15, derive: 7, duree: 15 },
+  { x: 150, y: -14, scale: 0.68, opacity: 0.13, derive: -6, duree: 18 },
+  { x: 72, y: -19, scale: 0.55, opacity: 0.11, derive: 5, duree: 21 },
+  { x: 168, y: -24, scale: 0.78, opacity: 0.14, derive: -8, duree: 16 },
+  { x: 118, y: -27, scale: 0.6, opacity: 0.1, derive: 6, duree: 24 },
+  { x: 54, y: -33, scale: 0.72, opacity: 0.12, derive: -5, duree: 19 },
+  { x: 190, y: -36, scale: 0.5, opacity: 0.09, derive: 7, duree: 22 },
+  { x: 134, y: -40, scale: 0.9, opacity: 0.13, derive: -7, duree: 17 },
+  { x: 86, y: -45, scale: 0.62, opacity: 0.1, derive: 5, duree: 25 },
+  { x: 160, y: -49, scale: 0.46, opacity: 0.08, derive: -6, duree: 20 },
+  { x: 108, y: -53, scale: 0.7, opacity: 0.11, derive: 8, duree: 18 },
+  { x: 44, y: -57, scale: 0.52, opacity: 0.09, derive: -5, duree: 23 },
+  { x: 182, y: -60, scale: 0.58, opacity: 0.08, derive: 6, duree: 26 },
+  { x: 126, y: -64, scale: 0.44, opacity: 0.07, derive: -7, duree: 21 },
+  { x: 70, y: -68, scale: 0.5, opacity: 0.07, derive: 5, duree: 27 },
+  { x: 150, y: -71, scale: 0.4, opacity: 0.06, derive: -6, duree: 24 },
+  { x: 100, y: -75, scale: 0.46, opacity: 0.06, derive: 7, duree: 19 },
+  { x: 60, y: -79, scale: 0.38, opacity: 0.05, derive: -5, duree: 28 },
+  { x: 176, y: -82, scale: 0.42, opacity: 0.05, derive: 6, duree: 22 },
+  { x: 118, y: -86, scale: 0.36, opacity: 0.05, derive: -7, duree: 25 },
+]
+
+function Ciel({ niveaux, sommet, reduire }) {
+  // Deux repères, et la droite qui les joint : deux nuages au premier niveau
+  // au-dessus du plafond, une dizaine au vingtième. Soit un peu moins d'un
+  // nuage par cran — assez pour que chaque pas se voie, pas assez pour que le
+  // ciel se referme sur l'immeuble.
+  const combien = niveaux <= NIVEAUX_PLAFOND_DESSIN
+    ? 0
+    : Math.min(CIEL.length, Math.round(2 + (niveaux - NIVEAUX_PLAFOND_DESSIN - 1) * (8 / 9)))
+
+  return (
+    <AnimatePresence initial={false}>
+      {CIEL.slice(0, combien).map((n, index) => (
+        <motion.g
+          key={n.x + ':' + n.y}
+          initial={{ opacity: 0, scale: 0.4 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.4 }}
+          transition={{ ...POP, delay: Math.min(index, 8) * 0.025 }}
+          style={{ transformOrigin: `${n.x}px ${sommet + n.y}px` }}
+        >
+          {/* Deux groupes imbriqués, et c'est nécessaire : l'apparition anime
+              `scale` sur celui du dessus, la dérive anime `x` sur celui du
+              dessous. Sur un seul groupe, la seconde écraserait la première. */}
+          <motion.g
+            animate={reduire ? undefined : { x: [0, n.derive, 0] }}
+            transition={{ duration: n.duree, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <g transform={`translate(${n.x} ${sommet + n.y})`}>
+              <Nuage scale={n.scale} opacity={n.opacity} />
+            </g>
+          </motion.g>
+        </motion.g>
+      ))}
+    </AnimatePresence>
   )
 }
 
@@ -888,6 +972,11 @@ function Nuage({ x, y, scale = 1 }) {
  * relais (voir ci-dessus).
  */
 export function NiveauxIllustration({ count = 0 }) {
+  // La dérive des nuages est une boucle infinie : elle doit se taire quand le
+  // système demande moins de mouvement. L'apparition, elle, reste — c'est un
+  // retour à une action, pas un ornement.
+  const reduire = useReducedMotion()
+
   if (count <= 0) {
     return (
       <Scene>
@@ -906,12 +995,9 @@ export function NiveauxIllustration({ count = 0 }) {
     )
   }
 
-  // La pile plafonne ; le compteur, lui, continue — et ce sont les nuages qui
-  // portent la différence.
+  // La pile plafonne ; le compteur, lui, continue — et c'est la couche de
+  // nuages qui porte la différence (voir `Ciel`).
   const empiles = Math.min(count, NIVEAUX_PLAFOND_DESSIN)
-  const nuages = count <= NIVEAUX_PLAFOND_DESSIN
-    ? 0
-    : Math.min(3, Math.ceil((count - NIVEAUX_PLAFOND_DESSIN) / 4))
 
   const height = empiles * ETAGE_H + 5
   const scale = height > 60 ? 60 / height : 1
@@ -919,27 +1005,10 @@ export function NiveauxIllustration({ count = 0 }) {
   // Les nuages se placent au-dessus du toit *après* mise à l'échelle : ils
   // flottent dans le cadre, ils ne font pas partie de la pile.
   const sommet = -(empiles * ETAGE_H + 5) * scale
-  const CIEL = [
-    { x: 86, dy: -9, scale: 0.9 },
-    { x: 152, dy: -17, scale: 0.72 },
-    { x: 112, dy: -24, scale: 0.6 },
-  ]
 
   return (
     <Scene>
-      <AnimatePresence initial={false}>
-        {CIEL.slice(0, nuages).map((n, index) => (
-          <motion.g
-            key={n.x}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -10 }}
-            transition={{ ...SPRING, delay: index * 0.05 }}
-          >
-            <Nuage x={n.x} y={sommet + n.dy} scale={n.scale} />
-          </motion.g>
-        ))}
-      </AnimatePresence>
+      <Ciel niveaux={count} sommet={sommet} reduire={reduire} />
 
       <motion.g style={{ transformOrigin: '120px 0px' }} animate={{ scale }} transition={SPRING}>
         <AnimatePresence initial={false}>
@@ -1433,6 +1502,109 @@ export function JardinIllustration({ value = 0, max = 500 }) {
           )
         })}
       </AnimatePresence>
+    </Scene>
+  )
+}
+
+/* -------------------------------------------------------------- ascenseur */
+
+/**
+ * Ascenseur — la cabine monte dans sa gaine.
+ *
+ * Même parti que la piscine, dont ce champ reprend la forme : un état binaire,
+ * donc un dessin qui bascule plutôt qu'un dessin qui compte. L'immeuble et la
+ * gaine sont toujours là ; seule la cabine change de régime.
+ *
+ * À « non », elle reste en bas, éteinte, et la gaine se lit comme une cage
+ * d'escalier — c'est l'absence qui est montrée, pas le vide. À « oui », elle
+ * monte, marque un temps en haut, et redescend : un aller-retour lent et
+ * continu, assez pour qu'on comprenne le mouvement sans que la carte réclame
+ * l'attention pendant qu'on remplit le reste du formulaire.
+ *
+ * Les paliers sont dessinés à l'intérieur de la gaine, et c'est ce qui fait
+ * lire « ascenseur » plutôt que « rectangle qui glisse » : la cabine les
+ * dépasse, elle ne flotte pas.
+ */
+const ASCENSEUR_H = 52
+const CABINE_H = 11
+const GAINE_W = 16
+
+export function AscenseurIllustration({ active }) {
+  const reduire = useReducedMotion()
+
+  // Course de la cabine, du bas de la gaine au dernier palier.
+  const bas = -2
+  const haut = -(ASCENSEUR_H - CABINE_H - 2)
+
+  return (
+    <Scene>
+      {/* L'immeuble, figé : la gaine le traverse. */}
+      <rect
+        x={120 - 34}
+        y={-ASCENSEUR_H - 4}
+        width="68"
+        height={ASCENSEUR_H + 4}
+        rx="1.5"
+        fill="#3C3C3C"
+        fillOpacity="0.09"
+      />
+      {[-44, -32, -20].map((y) => (
+        <rect key={y} x={120 + 12} y={y} width="14" height="6" fill="#F5F5F5" fillOpacity="0.8" />
+      ))}
+
+      {/* La gaine, et ses paliers. */}
+      <rect
+        x={120 - GAINE_W / 2 - 14}
+        y={-ASCENSEUR_H}
+        width={GAINE_W}
+        height={ASCENSEUR_H}
+        rx="1.5"
+        fill="#3C3C3C"
+        fillOpacity="0.12"
+        stroke="#3C3C3C"
+        strokeOpacity="0.3"
+        strokeWidth="1.2"
+      />
+      {[-13, -26, -39].map((y) => (
+        <path
+          key={y}
+          d={`M${120 - GAINE_W / 2 - 14} ${y} h${GAINE_W}`}
+          stroke="#3C3C3C"
+          strokeOpacity="0.22"
+          strokeWidth="1"
+        />
+      ))}
+
+      {/* La cabine. */}
+      <motion.g
+        animate={
+          active && !reduire
+            ? { y: [bas, haut, haut, bas, bas] }
+            : { y: active ? haut : bas }
+        }
+        transition={
+          active && !reduire
+            ? { duration: 5.2, times: [0, 0.38, 0.52, 0.9, 1], repeat: Infinity, ease: 'easeInOut' }
+            : SPRING
+        }
+      >
+        <rect
+          x={120 - GAINE_W / 2 - 11}
+          y={-CABINE_H}
+          width={GAINE_W - 6}
+          height={CABINE_H}
+          rx="1"
+          fill={active ? '#B4002F' : '#3C3C3C'}
+          fillOpacity={active ? 0.55 : 0.22}
+        />
+        {/* La fente des portes : elle ne se voit qu'une fois la cabine allumée. */}
+        <path
+          d={`M${120 - 14} ${-CABINE_H + 2} v${CABINE_H - 4}`}
+          stroke="#F5F5F5"
+          strokeOpacity={active ? 0.65 : 0.25}
+          strokeWidth="1"
+        />
+      </motion.g>
     </Scene>
   )
 }

@@ -86,10 +86,10 @@ export const COEF_CLASSE_ENERGIE = {
  * la prime existe mais se tasse vite : entre un sixième et un neuvième étage,
  * l'acquéreur ne distingue plus grand-chose.
  *
- * Un étage élevé sans ascenseur se décoterait, lui, au lieu de se valoriser —
- * mais le formulaire ne recueille pas la présence d'un ascenseur, et la
- * supposer serait décider à la place de l'agent. Le barème retient donc
- * l'hypothèse majoritaire du parc collectif de plus de trois niveaux.
+ * Ce barème-ci ne dit que la hauteur. La desserte est désormais une question à
+ * part, posée au formulaire et chiffrée par `coefAscenseur` ci-dessous : les
+ * deux se cumulent sans faire double emploi, l'un portant ce que l'étage
+ * apporte, l'autre ce qu'il coûte à atteindre.
  */
 export function coefEtage(etage) {
   if (etage === 0) return -0.04
@@ -97,6 +97,46 @@ export function coefEtage(etage) {
   if (etage <= 3) return 0
   if (etage <= 5) return 0.02
   return 0.03
+}
+
+/**
+ * Ascenseur — appartements seulement, et seulement une fois l'étage connu.
+ *
+ * C'est le complément de `coefEtage`, qui ne décrit que la hauteur. Un sixième
+ * étage desservi et un sixième étage sans ascenseur ne sont pas le même bien :
+ * le premier se vend sur la vue et le calme, le second les offre à qui veut
+ * bien monter. Tant que le formulaire ne posait pas la question, le barème
+ * d'étage retenait l'hypothèse majoritaire — immeuble desservi — et c'était la
+ * seule honnête. Elle n'a plus lieu d'être.
+ *
+ * L'asymétrie est volontaire et reflète le marché : l'ascenseur ne se paie pas,
+ * il est attendu. Sa présence ne bonifie qu'en hauteur, là où il cesse d'aller
+ * de soi ; son absence, elle, décote, et de plus en plus vite à mesure qu'on
+ * monte — deux étages se montent, six ne se montent pas.
+ *
+ * Les deux barèmes se rejoignent au rez-de-chaussée et au premier, où la
+ * question ne se pose pas : personne n'achète un rez-de-chaussée pour son
+ * ascenseur, et personne ne renonce à un premier étage faute d'en avoir un.
+ *
+ * `jusqua` se lit « jusqu'à cet étage inclus » ; la dernière entrée, sans
+ * borne, vaut pour tout ce qui est au-dessus.
+ */
+export const COEF_ASCENSEUR = {
+  avec: [{ jusqua: 3, coefficient: 0 }, { coefficient: 0.02 }],
+  sans: [
+    { jusqua: 1, coefficient: 0 },
+    { jusqua: 2, coefficient: -0.02 },
+    { jusqua: 3, coefficient: -0.05 },
+    { coefficient: -0.08 },
+  ],
+}
+
+/** Coefficient de desserte, pour un étage connu et une réponse déclarée. */
+export function coefAscenseur(etage, ascenseur) {
+  const bareme = ascenseur ? COEF_ASCENSEUR.avec : COEF_ASCENSEUR.sans
+  const palier = bareme.find((p) => p.jusqua === undefined || etage <= p.jusqua)
+
+  return palier?.coefficient ?? 0
 }
 
 /**
@@ -206,12 +246,30 @@ export function ajustementsPrix(characteristics) {
   // changement de type, mais une requête forgée — ou un état hérité d'un
   // parcours précédent — pourrait encore en porter un sur une maison.
   const etage = Number(c.etage)
-  if (c.typeBien === 'appartement' && Number.isInteger(etage) && etage >= 0) {
+  const etageConnu =
+    c.typeBien === 'appartement' && Number.isInteger(etage) && etage >= 0
+
+  if (etageConnu) {
     const coefficient = coefEtage(etage)
     if (coefficient !== 0) {
       details.push({
         id: 'etage',
         label: etage === 0 ? 'Rez-de-chaussée' : etage === 1 ? '1er étage' : `${etage}e étage`,
+        coefficient,
+      })
+    }
+  }
+
+  // La desserte ne se chiffre qu'une fois l'étage connu : sans lui, « avec
+  // ascenseur » et « sans ascenseur » désignent le même bien, et le barème
+  // n'aurait rien à quoi s'appliquer. Un champ laissé de côté n'ajuste rien,
+  // comme partout ailleurs ici.
+  if (etageConnu && typeof c.ascenseur === 'boolean') {
+    const coefficient = coefAscenseur(etage, c.ascenseur)
+    if (coefficient !== 0) {
+      details.push({
+        id: 'ascenseur',
+        label: c.ascenseur ? 'Ascenseur' : 'Sans ascenseur',
         coefficient,
       })
     }

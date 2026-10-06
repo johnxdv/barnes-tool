@@ -102,18 +102,38 @@ function caracteristiques(c = {}) {
     // est une réponse, et un bien sans piscine dans un secteur qui en compte
     // beaucoup a intérêt à le dire plutôt qu'à laisser la question ouverte.
     champ('carac.piscine', 'Piscine', c.piscine == null ? null : c.piscine ? 'Oui' : 'Non'),
+    champ('carac.ascenseur', 'Ascenseur', c.ascenseur == null ? null : c.ascenseur ? 'Oui' : 'Non'),
     champ('carac.stationnementsInterieurs', 'Stationnements couverts', entier(c.stationnementsInterieurs)),
     champ('carac.stationnementsExterieurs', 'Stationnements extérieurs', entier(c.stationnementsExterieurs)),
   ]
 
-  // L'étage et le jardin privatif n'ont de sens qu'en appartement : le
-  // formulaire ne les pose pas ailleurs, la page n'a donc pas à en montrer la
-  // ligne vide.
-  const COLLECTIF = new Set(['carac.etage', 'carac.surfaceJardinPrivatif'])
+  // L'étage, le jardin privatif et l'ascenseur n'ont de sens qu'en
+  // appartement : le formulaire ne les pose pas ailleurs, la page n'a donc pas
+  // à en montrer la ligne vide.
+  const COLLECTIF = new Set(['carac.etage', 'carac.surfaceJardinPrivatif', 'carac.ascenseur'])
   const utiles = (liste) =>
     liste.filter((f) => !COLLECTIF.has(f.id) || c.typeBien === 'appartement')
 
   return { bien: utiles(bien), bati }
+}
+
+/**
+ * Desserte déclarée, pour la liste des critères.
+ *
+ * Indépendante du coefficient, qui est nul sur les étages bas : le critère a
+ * été pris en compte dès qu'il a été renseigné, et c'est cela que la page
+ * rapporte. Même condition que le calcul (`api/_lib/ajustements.js`) —
+ * appartement, et réponse déclarée.
+ */
+function desserte(c = {}) {
+  if (c?.typeBien !== 'appartement' || typeof c?.ascenseur !== 'boolean') return []
+
+  return [
+    {
+      cle: 'estimation.critere.ascenseur',
+      label: c.ascenseur ? 'Ascenseur' : 'Sans ascenseur',
+    },
+  ]
 }
 
 /**
@@ -631,10 +651,18 @@ function estimation({ price, characteristics, ajustements, monaco }) {
     // n'affiche alors pas la section, plutôt qu'une liste vide qui se lirait
     // comme un relevé manquant.
     criteres: [
-      ...details.map((detail) => ({
-        cle: `estimation.critere.${detail.id}`,
-        label: detail.label,
-      })),
+      // L'ascenseur est écarté d'ici et repris plus bas : son barème vaut zéro
+      // sur les étages bas (desservi jusqu'au troisième, non desservi au
+      // rez-de-chaussée et au premier), et `ajustementsPrix` ne retient que les
+      // lignes qui déplacent le prix. Le critère a pourtant bien été pris en
+      // compte, et la page doit le dire.
+      ...details
+        .filter((detail) => detail.id !== 'ascenseur')
+        .map((detail) => ({
+          cle: `estimation.critere.${detail.id}`,
+          label: detail.label,
+        })),
+      ...desserte(characteristics),
       // Les surfaces annexes ferment la liste : elles décrivent ce que le bien
       // a en plus, là où les lignes précédentes décrivent ce qu'il est.
       ...surfacesAnnexes(characteristics),
