@@ -83,6 +83,9 @@ function caracteristiques(c = {}) {
     champ('carac.surfaceHabitable', 'Surface habitable', formatSurfaceOuNull(c.surfaceHabitable)),
     champ('carac.surfaceTerrain', 'Surface du terrain', formatSurfaceOuNull(c.surfaceTerrain)),
     champ('carac.surfaceTerrasse', 'Surface de terrasse', formatSurfaceOuNull(c.surfaceTerrasse)),
+    champ('carac.surfaceCave', 'Surface de cave', formatSurfaceOuNull(c.surfaceCave)),
+    champ('carac.surfaceRooftop', 'Surface du rooftop', formatSurfaceOuNull(c.surfaceRooftop)),
+    champ('carac.surfaceJardinPrivatif', 'Jardin privatif', formatSurfaceOuNull(c.surfaceJardinPrivatif)),
     champ('carac.nombrePieces', 'Nombre de pièces', entier(c.nombrePieces)),
     champ('carac.nombreChambres', 'Chambres', entier(c.nombreChambres)),
     champ('carac.nombreSallesBain', 'Salles de bain', entier(c.nombreSallesBain)),
@@ -103,12 +106,44 @@ function caracteristiques(c = {}) {
     champ('carac.stationnementsExterieurs', 'Stationnements extérieurs', entier(c.stationnementsExterieurs)),
   ]
 
-  // L'étage n'a de sens qu'en appartement : le formulaire ne le pose pas
-  // ailleurs, la page n'a donc pas à en montrer la ligne vide.
+  // L'étage et le jardin privatif n'ont de sens qu'en appartement : le
+  // formulaire ne les pose pas ailleurs, la page n'a donc pas à en montrer la
+  // ligne vide.
+  const COLLECTIF = new Set(['carac.etage', 'carac.surfaceJardinPrivatif'])
   const utiles = (liste) =>
-    liste.filter((f) => f.id !== 'carac.etage' || c.typeBien === 'appartement')
+    liste.filter((f) => !COLLECTIF.has(f.id) || c.typeBien === 'appartement')
 
   return { bien: utiles(bien), bati }
+}
+
+/**
+ * Surfaces annexes déclarées, nommées et mesurées pour la liste des critères.
+ *
+ * Même règle que la valorisation (`api/_lib/annexes.js`) : seules les surfaces
+ * strictement positives comptent, et le jardin privatif ne vaut qu'en
+ * appartement. Les deux listes doivent dire la même chose — le rapport ne peut
+ * pas mentionner un critère que le calcul n'a pas retenu.
+ */
+function surfacesAnnexes(c = {}) {
+  const positive = (valeur) => {
+    const n = Number(valeur)
+    return Number.isFinite(n) && n > 0 ? n : null
+  }
+
+  return [
+    { id: 'cave', label: 'Cave', surfaceM2: positive(c.surfaceCave) },
+    { id: 'rooftop', label: 'Rooftop', surfaceM2: positive(c.surfaceRooftop) },
+    {
+      id: 'jardin-privatif',
+      label: 'Jardin privatif',
+      surfaceM2: c.typeBien === 'appartement' ? positive(c.surfaceJardinPrivatif) : null,
+    },
+  ]
+    .filter((a) => a.surfaceM2 !== null)
+    .map((a) => ({
+      cle: `estimation.critere.${a.id}`,
+      label: `${a.label} de ${formatSurface(a.surfaceM2)}`,
+    }))
 }
 
 
@@ -595,10 +630,15 @@ function estimation({ price, characteristics, ajustements, monaco }) {
     // Liste vide quand le formulaire n'a rien déclaré de déterminant : la page
     // n'affiche alors pas la section, plutôt qu'une liste vide qui se lirait
     // comme un relevé manquant.
-    criteres: details.map((detail) => ({
-      cle: `estimation.critere.${detail.id}`,
-      label: detail.label,
-    })),
+    criteres: [
+      ...details.map((detail) => ({
+        cle: `estimation.critere.${detail.id}`,
+        label: detail.label,
+      })),
+      // Les surfaces annexes ferment la liste : elles décrivent ce que le bien
+      // a en plus, là où les lignes précédentes décrivent ce qu'il est.
+      ...surfacesAnnexes(characteristics),
+    ],
   }
 }
 

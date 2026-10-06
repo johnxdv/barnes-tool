@@ -29,6 +29,7 @@
 // d'API n'est nécessaire, et aucune ne transiterait par le front de toute façon.
 
 import { ajustementsPrix } from './_lib/ajustements.js'
+import { valeurAnnexes } from './_lib/annexes.js'
 import { prixDePresentation } from './_lib/presentation.js'
 import { describeBien } from './_lib/bien.js'
 import { departementPricePerM2, findComparables } from './_lib/comparables.js'
@@ -384,8 +385,18 @@ export default async function handler(req, res) {
     const ajustements = ajustementsPrix(characteristics)
 
     const raw = prix.pricePerM2 * surfaceM2 * (1 + ajustements.coefficient)
-    const calcule = clampPrice(round(raw))
-    // Dernière étape, après le moteur et la couche d'ajustements : voir
+
+    // Surfaces annexes — cave, rooftop, jardin privatif. Elles s'ajoutent
+    // **après** le plafond de cumul des ajustements et restent donc hors de
+    // lui : ce ne sont pas des nuances sur le même bien, ce sont des mètres
+    // carrés en plus (voir `_lib/annexes.js`). Elles se valorisent contre le
+    // prix au m² déjà ajusté, de sorte qu'un bien rénové voie aussi sa cave
+    // mieux valorisée. Sans aucune déclarée, le montant est nul et le prix
+    // reste exactement celui d'avant.
+    const annexes = valeurAnnexes(characteristics, prix.pricePerM2 * (1 + ajustements.coefficient))
+
+    const calcule = clampPrice(round(raw + annexes.montant))
+    // Dernière étape, après le moteur, les ajustements et les annexes : voir
     // `_lib/presentation.js`. Le prix au m² affiché et la fourchette se
     // déduisent du montant, et suivent donc sans traitement propre.
     const price = prixDePresentation(calcule)
@@ -414,6 +425,13 @@ export default async function handler(req, res) {
       // raison qu'on peut nommer.
       ajustements: traceAjustements(ajustements),
       prixAvantAjustements: Math.round(prix.pricePerM2 * surfaceM2),
+      // Surfaces annexes retenues, et ce qu'elles pèsent — au journal
+      // seulement : le rapport les nomme sans les chiffrer.
+      annexes: {
+        surfacePonderee: Number(annexes.surfacePonderee.toFixed(2)),
+        montant: Math.round(annexes.montant),
+        detail: annexes.details.map((d) => `${d.id} ${d.surfaceM2} m²`),
+      },
       elapsedMs: Date.now() - startedAt,
     }
 

@@ -853,12 +853,39 @@ function Etage({ index, y, fillOpacity }) {
 }
 
 /**
+ * Au-delà, l'immeuble cesse de monter et ce sont les nuages qui disent la
+ * hauteur.
+ *
+ * Le champ va jusqu'à vingt niveaux, mais le dessin ne peut pas suivre :
+ * au-dessus de dix, chaque niveau supplémentaire ne gagnerait qu'un ou deux
+ * pixels une fois la pile remise à l'échelle du cadre, et la carte donnerait
+ * l'impression de ne plus répondre. Les nuages règlent les deux problèmes à la
+ * fois — ils confirment que le curseur a bougé, et ils disent « c'est haut »
+ * mieux qu'une pile plus serrée.
+ */
+const NIVEAUX_PLAFOND_DESSIN = 10
+
+/** Un nuage, puis deux, puis trois, à mesure qu'on s'élève vers vingt. */
+function Nuage({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="0" rx="9" ry="4.2" fill="#3C3C3C" fillOpacity="0.14" />
+      <ellipse cx="-5.5" cy="1.2" rx="6" ry="3.4" fill="#3C3C3C" fillOpacity="0.12" />
+      <ellipse cx="5.5" cy="1.4" rx="6.5" ry="3.2" fill="#3C3C3C" fillOpacity="0.12" />
+    </g>
+  )
+}
+
+/**
  * Nombre de niveaux — l'immeuble monte.
  *
  * Chaque niveau arrive par le haut et pousse le toit devant lui ; passé cinq
  * étages, l'ensemble se réduit pour rester dans le cadre, exactement comme les
  * rangées se resserrent. Le rez-de-chaussée garde sa porte : c'est ce qui
  * empêche l'immeuble de se lire à l'envers.
+ *
+ * Passé `NIVEAUX_PLAFOND_DESSIN`, la pile est figée et les nuages prennent le
+ * relais (voir ci-dessus).
  */
 export function NiveauxIllustration({ count = 0 }) {
   if (count <= 0) {
@@ -879,14 +906,44 @@ export function NiveauxIllustration({ count = 0 }) {
     )
   }
 
-  const height = count * ETAGE_H + 5
+  // La pile plafonne ; le compteur, lui, continue — et ce sont les nuages qui
+  // portent la différence.
+  const empiles = Math.min(count, NIVEAUX_PLAFOND_DESSIN)
+  const nuages = count <= NIVEAUX_PLAFOND_DESSIN
+    ? 0
+    : Math.min(3, Math.ceil((count - NIVEAUX_PLAFOND_DESSIN) / 4))
+
+  const height = empiles * ETAGE_H + 5
   const scale = height > 60 ? 60 / height : 1
+
+  // Les nuages se placent au-dessus du toit *après* mise à l'échelle : ils
+  // flottent dans le cadre, ils ne font pas partie de la pile.
+  const sommet = -(empiles * ETAGE_H + 5) * scale
+  const CIEL = [
+    { x: 86, dy: -9, scale: 0.9 },
+    { x: 152, dy: -17, scale: 0.72 },
+    { x: 112, dy: -24, scale: 0.6 },
+  ]
 
   return (
     <Scene>
+      <AnimatePresence initial={false}>
+        {CIEL.slice(0, nuages).map((n, index) => (
+          <motion.g
+            key={n.x}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            transition={{ ...SPRING, delay: index * 0.05 }}
+          >
+            <Nuage x={n.x} y={sommet + n.dy} scale={n.scale} />
+          </motion.g>
+        ))}
+      </AnimatePresence>
+
       <motion.g style={{ transformOrigin: '120px 0px' }} animate={{ scale }} transition={SPRING}>
         <AnimatePresence initial={false}>
-          {Array.from({ length: count }, (_, index) => {
+          {Array.from({ length: empiles }, (_, index) => {
             const y = -(index + 1) * ETAGE_H
             return (
               <motion.g
@@ -903,10 +960,11 @@ export function NiveauxIllustration({ count = 0 }) {
           })}
         </AnimatePresence>
 
-        {/* Toiture : elle ne fait que suivre le sommet de la pile. */}
+        {/* Toiture : elle ne fait que suivre le sommet de la pile — plafonnée
+            comme elle, sans quoi elle décollerait seule vers le haut. */}
         <AnimatedRect
           x={120 - IMMEUBLE_W / 2 - 4}
-          y={-(count * ETAGE_H) - 5}
+          y={-(empiles * ETAGE_H) - 5}
           width={IMMEUBLE_W + 8}
           height="5"
           rx="1.5"
@@ -1202,5 +1260,179 @@ export function PiscineIllustration({ active }) {
           ))
         : null}
     </svg>
+  )
+}
+
+/* ------------------------------------------------------------ surfaces annexes */
+
+/**
+ * Surface de cave — le volume s'enfonce sous la maison.
+ *
+ * Même parti que le terrain : la maison ne bouge pas, c'est l'étalon. Ce qui
+ * s'anime est sous elle, et le trait de sol devient la ligne de partage — la
+ * seule illustration du jeu à travailler sous `GROUND_Y`, ce qui est tout le
+ * propos. Le volume s'élargit autant qu'il s'approfondit : une cave de cent
+ * mètres carrés n'est pas un puits, c'est une emprise.
+ */
+export function CaveIllustration({ value = 0, max = 100 }) {
+  const ratio = clamp01(value / max)
+  const width = 30 + ratio * 58
+  const depth = 4 + ratio * 9
+
+  return (
+    <Scene>
+      {/* La maison, figée : c'est elle qui donne l'échelle du sous-sol. */}
+      <g>
+        <rect x={120 - 21} y={-24} width="42" height="24" rx="1.5" fill="#3C3C3C" fillOpacity="0.1" />
+        <path d="M95 -24 L120 -37 L145 -24 Z" fill="#B4002F" fillOpacity="0.5" />
+        <rect x={120 - 4} y={-11} width="8" height="11" fill="#3C3C3C" fillOpacity="0.28" />
+        <rect x={120 - 15} y={-19} width="7" height="6" fill="#3C3C3C" fillOpacity="0.2" />
+        <rect x={120 + 8} y={-19} width="7" height="6" fill="#3C3C3C" fillOpacity="0.2" />
+      </g>
+
+      {/* Le volume enterré. Hachuré plutôt que plein : on ne voit pas une cave,
+          on en devine le creux. */}
+      <AnimatedRect
+        x={120 - width / 2}
+        y={2}
+        width={width}
+        animate={{ height: depth }}
+        initial={{ height: depth }}
+        rx="2"
+        fill="#3C3C3C"
+        fillOpacity="0.14"
+        stroke="#3C3C3C"
+        strokeOpacity="0.4"
+        strokeWidth="1.4"
+        strokeDasharray="3 2.5"
+      />
+    </Scene>
+  )
+}
+
+/**
+ * Surface du rooftop — la terrasse se déplie sur le toit.
+ *
+ * L'immeuble est l'étalon, et il est volontairement bas : un rooftop se lit par
+ * sa surface, pas par la hauteur qui le porte. Le garde-corps suit le plateau
+ * sur toute sa largeur — c'est lui, et non la dalle, qui fait lire « terrasse »
+ * plutôt que « toit plat ». Le parasol arrive quand la surface lui laisse la
+ * place, exactement comme le bassin du terrain.
+ */
+const ROOFTOP_PARASOL = 60
+
+export function RooftopIllustration({ value = 0, max = 200 }) {
+  const ratio = clamp01(value / max)
+  const width = 34 + ratio * 70
+  const parasol = value >= ROOFTOP_PARASOL
+
+  return (
+    <Scene>
+      {/* L'immeuble, figé. */}
+      <rect x={120 - 30} y={-34} width="60" height="34" rx="1.5" fill="#3C3C3C" fillOpacity="0.1" />
+      {[-28, -21, -14].map((y) => (
+        <g key={y}>
+          <rect x={120 - 22} y={y} width="10" height="5" fill="#F5F5F5" fillOpacity="0.8" />
+          <rect x={120 + 12} y={y} width="10" height="5" fill="#F5F5F5" fillOpacity="0.8" />
+        </g>
+      ))}
+
+      {/* La dalle du rooftop, posée sur l'acrotère. */}
+      <AnimatedRect
+        x={120 - width / 2}
+        y={-39}
+        width={width}
+        height="5"
+        rx="1.5"
+        fill="#1F3B2E"
+        fillOpacity="0.2"
+        stroke="#1F3B2E"
+        strokeOpacity="0.4"
+        strokeWidth="1.4"
+      />
+
+      {/* Garde-corps : deux montants qui suivent les bords du plateau. */}
+      <AnimatedRect x={120 - width / 2} y={-46} width="1.6" height="7" fill="#3C3C3C" fillOpacity="0.45" />
+      <AnimatedRect x={120 + width / 2 - 1.6} y={-46} width="1.6" height="7" fill="#3C3C3C" fillOpacity="0.45" />
+
+      <AnimatePresence initial={false}>
+        {parasol ? (
+          <motion.g
+            key="parasol"
+            style={{ transformOrigin: '120px -39px' }}
+            initial={{ opacity: 0, scale: 0.5, y: 6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.5, y: 6 }}
+            transition={POP}
+          >
+            <path d="M110 -47 Q120 -56 130 -47 Z" fill="#B4002F" fillOpacity="0.55" />
+            <rect x={119.3} y={-47} width="1.4" height="8" fill="#3C3C3C" fillOpacity="0.45" />
+          </motion.g>
+        ) : null}
+      </AnimatePresence>
+    </Scene>
+  )
+}
+
+/**
+ * Jardin privatif en rez-de-jardin — la bande verte s'étire devant l'immeuble.
+ *
+ * L'immeuble est au fond et ne bouge pas ; le jardin pousse vers l'avant, posé
+ * au sol, avec la haie qui le borde. Les arbustes arrivent par paliers depuis
+ * les extrémités, comme les arbres du terrain — c'est la même grammaire, à une
+ * autre échelle, et c'est voulu : les deux champs se lisent côte à côte.
+ */
+export function JardinIllustration({ value = 0, max = 500 }) {
+  const ratio = clamp01(value / max)
+  const width = 40 + ratio * 150
+  const arbustes = Math.min(5, Math.floor(value / 90))
+  const spots = [0.07, 0.93, 0.22, 0.78, 0.4]
+
+  return (
+    <Scene>
+      {/* L'immeuble, en retrait : le rez-de-jardin se lit par ce qu'il a devant. */}
+      <g opacity="0.75">
+        <rect x={120 - 24} y={-36} width="48" height="30" rx="1.5" fill="#3C3C3C" fillOpacity="0.1" />
+        {[-31, -24, -17].map((y) => (
+          <g key={y}>
+            <rect x={120 - 17} y={y} width="8" height="4" fill="#F5F5F5" fillOpacity="0.8" />
+            <rect x={120 + 9} y={y} width="8" height="4" fill="#F5F5F5" fillOpacity="0.8" />
+          </g>
+        ))}
+      </g>
+
+      {/* Le jardin. */}
+      <AnimatedRect
+        x={120 - width / 2}
+        y={-6}
+        width={width}
+        height="12"
+        rx="6"
+        fill="#1F3B2E"
+        fillOpacity="0.18"
+        stroke="#1F3B2E"
+        strokeOpacity="0.38"
+        strokeWidth="1.5"
+      />
+
+      <AnimatePresence initial={false}>
+        {spots.slice(0, arbustes).map((spot, index) => {
+          const x = 120 - width / 2 + spot * width
+          return (
+            <motion.g
+              key={spot}
+              style={{ transformOrigin: '0px -6px' }}
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={{ opacity: 1, scale: 1, x }}
+              exit={{ opacity: 0, scale: 0.4 }}
+              transition={{ ...POP, x: SPRING, delay: index * 0.03 }}
+            >
+              <circle cx="0" cy="-9" r="4" fill="#1F3B2E" fillOpacity="0.5" />
+              <rect x="-0.6" y="-7" width="1.2" height="7" fill="#1F3B2E" fillOpacity="0.55" />
+            </motion.g>
+          )
+        })}
+      </AnimatePresence>
+    </Scene>
   )
 }

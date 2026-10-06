@@ -15,6 +15,9 @@ import {
   PiscineIllustration,
   SalleEauIllustration,
   SdbIllustration,
+  CaveIllustration,
+  JardinIllustration,
+  RooftopIllustration,
   TerrainIllustration,
   TerrasseIllustration,
 } from './SpecIllustrations'
@@ -145,6 +148,11 @@ const BORNES = {
   surfaceHabitable: { min: 10, max: 800, step: 5, start: 100 },
   surfaceTerrain: { min: 0, max: 5000, step: 25, start: 600 },
   surfaceTerrasse: { min: 0, max: 200, step: 1, start: 20 },
+  // Surfaces annexes. Pas de 5 m² au glissement — ce sont des surfaces qu'on
+  // annonce arrondies — et les boutons « − / + » gardent le mètre près.
+  surfaceCave: { min: 0, max: 100, step: 5, start: 20 },
+  surfaceRooftop: { min: 0, max: 200, step: 5, start: 40 },
+  surfaceJardinPrivatif: { min: 0, max: 500, step: 5, start: 80 },
 }
 
 /**
@@ -162,7 +170,7 @@ const PLAFONDS = {
   nombreChambres: 8,
   nombreSallesBain: 6,
   nombreSallesEau: 6,
-  nombreNiveaux: 10,
+  nombreNiveaux: 20,
   stationnementsExterieurs: 8,
   stationnementsInterieurs: 8,
 }
@@ -183,6 +191,9 @@ const VALEURS_VIDES = {
   surfaceHabitable: null,
   surfaceTerrain: null,
   surfaceTerrasse: null,
+  surfaceCave: null,
+  surfaceRooftop: null,
+  surfaceJardinPrivatif: null,
   nombrePieces: null,
   nombreChambres: null,
   nombreSallesBain: null,
@@ -403,6 +414,54 @@ export function EstimationCharacteristicsStep({ detection, onBack, onValidate })
                 <TerrasseIllustration value={surface} max={BORNES.surfaceTerrasse.max} />
               )}
             />
+
+            <SliderField
+              key="surface-cave"
+              label="Surface de cave"
+              value={values.surfaceCave}
+              onChange={set('surfaceCave')}
+              {...BORNES.surfaceCave}
+              format={surfaceLabel(BORNES.surfaceCave.max)}
+              minLabel="0 m²"
+              maxLabel="100+ m²"
+              illustration={(surface) => (
+                <CaveIllustration value={surface} max={BORNES.surfaceCave.max} />
+              )}
+            />
+
+            <SliderField
+              key="surface-rooftop"
+              label="Surface du rooftop"
+              value={values.surfaceRooftop}
+              onChange={set('surfaceRooftop')}
+              {...BORNES.surfaceRooftop}
+              format={surfaceLabel(BORNES.surfaceRooftop.max)}
+              minLabel="0 m²"
+              maxLabel="200+ m²"
+              illustration={(surface) => (
+                <RooftopIllustration value={surface} max={BORNES.surfaceRooftop.max} />
+              )}
+            />
+
+            {/* Le rez-de-jardin ne concerne que le collectif : une maison a un
+                terrain, pas un jardin privatif. Même condition que l'étage, et
+                posée sur l'état plutôt que sur les boutons — un type détecté le
+                fait naître aussi bien qu'un type cliqué. */}
+            {values.typeBien === 'appartement' ? (
+              <SliderField
+                key="surface-jardin"
+                label="Jardin privatif (rez-de-jardin)"
+                value={values.surfaceJardinPrivatif}
+                onChange={set('surfaceJardinPrivatif')}
+                {...BORNES.surfaceJardinPrivatif}
+                format={surfaceLabel(BORNES.surfaceJardinPrivatif.max)}
+                minLabel="0 m²"
+                maxLabel="500+ m²"
+                illustration={(surface) => (
+                  <JardinIllustration value={surface} max={BORNES.surfaceJardinPrivatif.max} />
+                )}
+              />
+            ) : null}
 
             <StepperField
               key="pieces"
