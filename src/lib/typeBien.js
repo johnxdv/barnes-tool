@@ -251,3 +251,126 @@ export async function detectPropertyType(selection, { signal, onParcelle } = {})
 
   return { type: 'autre', source: 'inconnu', confiance: 'nulle', parcelle, fiche }
 }
+
+/* ------------------------------------------------------------------
+ * Arbitrage maison / appartement — repris tel quel du moteur Immovia
+ * (`src/lib/typeBien.js`), pour que `api/estimation.js` tranche comme lui
+ * quand aucune base n a rien su dire du bâtiment.
+ *
+ * Ajout strictement additif : aucun export existant ne change, et le
+ * formulaire comme la carte continuent d appeler `detectPropertyType` et
+ * `estTypeFiable` exactement comme avant.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Part du collectif dans le parc, avant tout indice — exprimée en log-odds
+ * (−0,35 ≈ 41 %). Le parcours estime des logements et non des bâtiments : la
+ * proportion retenue est celle des résidences principales (~44 % d'appartements
+ * en France, INSEE), et non celle du bâti, où la maison écraserait tout.
+ *
+ * Volontairement légère : elle ne tranche que si rien d'autre ne le fait.
+ */
+const PRIOR_APPARTEMENT = -0.35
+
+/**
+ * Poids des indices, en log-odds vers le collectif.
+ *
+ * Aucun de ces trois relevés ne *dit* la vocation du bâtiment — sans quoi la
+ * détection se serait arrêtée avant d'arriver ici. Ils la suggèrent seulement,
+ * et c'est exactement ce qu'exprime une somme de log-odds : deux indices faibles
+ * concordants pèsent plus qu'un seul, aucun ne décide à lui seul.
+ *
+ * Les valeurs sont des ordres de grandeur assumés — un rapport de cotes de 3
+ * pour un bâtiment de quatre à cinq niveaux, de 9 au-delà de six. Elles ne
+ * prétendent pas à l'étalonnage : leur seul rôle est de faire pencher la
+ * réponse du bon côté quand plus rien d'autre ne la porte.
+ */
+function poidsNiveaux(niveaux) {
+  if (!Number.isFinite(niveaux) || niveaux <= 0) return 0
+  if (niveaux <= 2) return -1
+  if (niveaux === 3) return 0.3
+  if (niveaux <= 5) return 1.2
+  return 2.2
+}
+
+/**
+ * La hauteur BD TOPO® est mesurée **au faîtage** : une maison de plain-pied y
+ * fait 5,2 m en médiane et une R+1 près de 8 (relevés détaillés dans
+ * `api/_lib/bien.js`). Les paliers en tiennent compte — 8 m n'est pas deux
+ * étages, c'en est un.
+ */
+function poidsHauteur(hauteur) {
+  if (!Number.isFinite(hauteur) || hauteur <= 0) return 0
+  if (hauteur < 8) return -0.8
+  if (hauteur < 12) return 0.2
+  if (hauteur < 18) return 1.2
+  return 2.2
+}
+
+/**
+ * Emprise au sol du contour cliqué. L'indice le plus faible des trois : une
+ * grande emprise désigne aussi bien un immeuble qu'un corps de ferme, et une
+ * petite un pavillon comme un immeuble de faubourg sur rue étroite.
+ */
+function poidsEmprise(areaM2) {
+  if (!Number.isFinite(areaM2) || areaM2 <= 0) return 0
+  if (areaM2 < 120) return -0.5
+  if (areaM2 < 300) return 0
+  if (areaM2 < 800) return 0.8
+  return 1.6
+}
+
+/**
+ * Indice de gabarit — le plus parlant des deux relevés qui le décrivent.
+ *
+ * Niveaux comptés et hauteur mesurée disent la même chose, et se contredisent
+ * souvent : la BD TOPO® déclare volontiers un étage sur un bâtiment de 27 m,
+ * son `nombre_d_etages` valant 1 par défaut là où il n'a pas été levé. Retenir
+ * celui des deux qui penche le plus vers le collectif revient à ne jamais
+ * laisser un comptage par défaut annuler une hauteur mesurée — et, quand les
+ * deux s'accordent vers la maison, à rester du côté prudent de l'arbitrage.
+ *
+ * Un relevé absent ne pèse pas : il ne vaut ni indice ni contre-indice, et
+ * n'entre donc pas dans la comparaison.
+ */
+function poidsGabarit(niveaux, hauteur) {
+  const releves = []
+  if (Number.isFinite(niveaux) && niveaux > 0) releves.push(poidsNiveaux(niveaux))
+  if (Number.isFinite(hauteur) && hauteur > 0) releves.push(poidsHauteur(hauteur))
+
+  return releves.length > 0 ? Math.max(...releves) : 0
+}
+
+/**
+ * Tranche entre maison et appartement quand aucune base n'a rien dit du
+ * bâtiment.
+ *
+ * **Le parcours ne connaît pas l'indécision.** Il n'y a personne à qui demander
+ * — le type n'est pas montré à l'utilisateur et ne lui est jamais soumis — et un
+ * type indéterminé ne ferait pas moins de dégâts qu'un type faux : il aligne
+ * l'estimation sur une médiane tous logements confondus, c'est-à-dire sur un
+ * marché qui n'est celui de personne. Entre deux réponses incertaines, la moins
+ * incertaine vaut donc toujours mieux qu'aucune, **même à 51 %**.
+ *
+ * La probabilité retenue redescend avec le type : elle ne s'affiche nulle part,
+ * mais elle part au journal, où elle dira à l'usage si ces arbitrages tombent
+ * juste — et à quelle fréquence il faut seulement en passer par là.
+ *
+ * Niveaux et hauteur ne comptent que pour un seul indice — le gabarit du
+ * bâtiment — et non pour deux : ils décrivent la même chose, l'une comptée et
+ * l'autre mesurée, et les additionner reviendrait à la retenir deux fois.
+ */
+export function arbitreTypeResidentiel({ niveaux, hauteur, areaM2 } = {}) {
+  const cotes =
+    PRIOR_APPARTEMENT +
+    poidsGabarit(Number(niveaux), Number(hauteur)) +
+    poidsEmprise(Number(areaM2))
+
+  const appartement = 1 / (1 + Math.exp(-cotes))
+
+  return {
+    type: appartement >= 0.5 ? 'appartement' : 'maison',
+    confiance: 'nulle',
+    probabilites: { maison: 1 - appartement, appartement },
+  }
+}

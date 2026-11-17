@@ -1,89 +1,76 @@
-// Fonction serverless Vercel — moteur d'estimation.
+// Fonction serverless Vercel — estimation.
 //
-// Reçoit le bâtiment repéré sur la carte et renvoie un montant en euros. Tout
-// le calcul vit ici : le front ne connaît ni les sources de données, ni la
-// méthode, ni les paliers d'élargissement — il n'obtient qu'un nombre, et les
-// quelques caractéristiques que les bases connaissaient déjà du bien (type,
-// classe énergie), afin de ne pas les redemander au formulaire suivant.
+// CE FICHIER EST UN ADAPTATEUR, et rien d'autre. Le calcul vit dans le moteur
+// repris d'Immovia (`_lib/moteur.js` et ses dépendances) ; la correction propre
+// à Barnes vit dans `_lib/barnes-adjustments/`. Ce handler ne fait que les
+// enchaîner et rendre le résultat sous la forme que le front Barnes attend
+// depuis toujours.
 //
-// La Principauté de Monaco court-circuite tout cela : aucune des sources
-// n'y publie quoi que ce soit, et le montant s'y calcule d'une multiplication
-// par un prix au m² de référence (voir `../src/lib/monaco.js`).
+// ORDRE DU CALCUL, et il ne doit pas changer :
 //
-//   A. Caractéristiques du bien      → `_lib/bien.js`      (BDNB, cadastre)
-//   B. Ventes comparables            → `_lib/comparables.js` (DVF / Etalab)
-//   C. Médiane au m² × surface       → ci-dessous
-//   D. Ajustements du formulaire     → `_lib/ajustements.js`
-//   E. Replis successifs             → `_lib/reference.js`
-//   E'. Territoire du livre foncier   → `_lib/alsaceMoselle.js` (Insee Filosofi)
+//   1. **Moteur Immovia** — sélection des comparables, pondération,
+//      actualisation temporelle, ajustement de terrain, étage. Pour un même
+//      bien, il rend l'euro qu'Immovia rendrait.
+//   2. **Couche Barnes** — les coefficients du formulaire (plafonnés à ±15 %)
+//      puis les surfaces annexes (hors plafond). Voir
+//      `_lib/barnes-adjustments/index.js`.
+//   3. **Majoration de positionnement ×1,07** — en tout dernier, hors du moteur
+//      comme hors du plafond. Voir `_lib/barnes-adjustments/presentation.js`.
 //
-// L'étape D n'existe qu'au second appel. Le moteur est sollicité deux fois par
-// parcours : une première fois pendant l'analyse, sur ce que les bases savent
-// du bâtiment, une seconde à la validation du formulaire, avec la surface
-// déclarée *et* les caractéristiques saisies. Seul ce second montant fait foi
-// au rapport (voir `saveCharacteristics` dans `src/App.jsx`).
+// LA FRONTIÈRE. Rien de Barnes n'entre dans les fichiers du moteur : ils sont
+// byte-identiques au dépôt Immovia et doivent pouvoir y être resynchronisés en
+// remplaçant simplement les fichiers. C'est ici, et seulement ici, que les deux
+// se rencontrent.
 //
-// Aucune de ces étapes ne peut faire échouer la réponse : chacune a son repli,
-// et le parcours utilisateur ne doit jamais s'interrompre sur une donnée
-// manquante. Toutes les sources sont des services publics ouverts — aucune clé
-// d'API n'est nécessaire, et aucune ne transiterait par le front de toute façon.
+// LE CONTRAT DE SORTIE ne bouge pas : `{ ok, price, detection, ajustements }`,
+// plus `meta` sous `ESTIMATION_DEBUG`. L'interface, le rapport et l'export PDF
+// lisent ces champs-là et n'ont pas été touchés. Le moteur d'Immovia rend, lui,
+// `{ price, low, high, confiance }` : ses bornes et son niveau de confiance ne
+// remontent donc pas au front, qui calcule sa fourchette comme avant.
+//
+// DEUX ÉCARTS ASSUMÉS AVEC LE HANDLER D'IMMOVIA, et les voici en toutes lettres :
+//
+//  - **La surface peut manquer.** Immovia refuse d'estimer sans surface
+//    déclarée (400). Barnes ne le peut pas : son premier appel part pendant
+//    l'écran d'analyse, avant le formulaire qui la recueille, et le rejeter
+//    interromprait le parcours. La cascade de replis de Barnes est donc gardée
+//    — surface déclarée, puis reconstituée par `describeBien`, puis ordre de
+//    grandeur.
+//  - **L'étage appartient au moteur.** Il était corrigé des deux côtés ; le
+//    barème d'Immovia est le seul mesuré, et deux barèmes auraient fait diverger
+//    Barnes d'Immovia sur tous les appartements. `coefEtage` a donc quitté la
+//    couche Barnes. L'ascenseur, lui, y reste : Immovia n'en a aucune notion.
 
-import { ajustementsPrix } from './_lib/ajustements.js'
-import { valeurAnnexes } from './_lib/annexes.js'
-import { prixDePresentation } from './_lib/presentation.js'
 import { describeBien } from './_lib/bien.js'
-import { departementPricePerM2, findComparables } from './_lib/comparables.js'
-import { DvfIndisponible } from './_lib/dvf.js'
+import { DvfIndisponible, chargeDepartement, chargeVoisins } from './_lib/dvf.js'
+import { estime, montantAffichable } from './_lib/moteur.js'
 import { communeAtPoint, departementFromInsee } from './_lib/geo.js'
-import { estLivreFoncier, prixLivreFoncier } from './_lib/alsaceMoselle.js'
-import { estHorsCouvertureDvf, prixReference } from './_lib/reference.js'
-import { detectPropertyType, estTypeFiable } from '../src/lib/typeBien.js'
+import { estHorsCouvertureDvf, majoreHorsDvf, prixReference } from './_lib/reference.js'
+import { CHARGEMENT } from './_lib/estimationConfig.js'
+import {
+  appliqueAjustementsBarnes,
+  prixDePresentation,
+} from './_lib/barnes-adjustments/index.js'
+import { arbitreTypeResidentiel, detectPropertyType, estTypeFiable } from '../src/lib/typeBien.js'
+import { coefficientEtage, normaliseEtage } from '../src/lib/etage.js'
 import { MONACO_PRICE_PER_M2 } from '../src/lib/monaco.js'
 
 /**
- * Budget global du calcul.
- *
- * Il valait 10 s, doublé d'un plafond de 7 s sur la seule étape DVF, et les deux
- * reposaient sur le même pari : qu'un repli approché valait mieux qu'une réponse
- * en retard. Le pari était perdant, parce que le repli ne se voyait pas. Les 7 s
- * expiraient pendant le décodage des quelque 125 000 ventes d'un département, le
- * calcul basculait sur un barème statistique, et l'écran affichait un montant
- * que rien ne distinguait d'une vraie comparaison de voisinage.
- *
- * Le plafond de l'étape DVF est supprimé : le chargement a désormais son propre
- * délai par millésime et ses réessais (voir `_lib/dvf.js`), et c'est là que la
- * question se tranche, fichier par fichier. Le budget global subsiste comme
- * garde-fou de dernier ressort, porté à 50 s — sous la minute que `vercel.json`
- * accorde à la fonction, de quoi laisser aboutir six millésimes et leurs
- * réessais.
- *
- * L'écran de chargement du front dure toujours 12 s ; il attend maintenant la
- * réponse au lieu de lui donner le tempo.
+ * Budget global de l'appel, aligné sur celui d'Immovia : le chargement DVF a
+ * son propre plafond (`CHARGEMENT.budgetTotalMs`, 25 s) et ses réessais, et
+ * `vercel.json` accorde une minute à la fonction.
  */
-const BUDGET_MS = 50000
+const BUDGET_MS = 30000
 
 /**
- * Surfaces de dernier recours, quand aucune base n'a rien à dire du bâtiment
- * — repérage libre hors cadastre, bâtiment inconnu de la BDNB comme de la
- * BD TOPO. Ordres de grandeur du parc français, retenus pour que le parcours
- * aboutisse malgré tout.
+ * Surfaces de dernier recours, quand aucune base n'a rien à dire du bâtiment.
+ * Propres à Barnes : voir l'écart assumé en tête de fichier.
  */
 const SURFACE_PAR_DEFAUT = { maison: 100, appartement: 65, terrain: 600 }
 
-/**
- * Bornes de la surface déclarée au curseur, alignées sur celles du formulaire
- * qui la recueille (`EstimationCharacteristicsStep`). Le curseur ne peut rien
- * produire en dehors — la vérification vise une requête forgée, pas
- * l'utilisateur.
- */
+/** Bornes de la surface déclarée au curseur, alignées sur le formulaire. */
 const SURFACE_DECLAREE_RANGE = [10, 800]
 
-/**
- * Surface saisie par l'utilisateur, ou `null` si le champ est absent ou
- * aberrant. Elle vaut mieux que toute reconstitution : celui qui fait estimer
- * son bien en connaît la surface, là où le moteur la déduit d'une emprise au
- * sol et d'un nombre de niveaux présumé.
- */
 function surfaceDeclaree(value) {
   const surface = Number(value)
   const [min, max] = SURFACE_DECLAREE_RANGE
@@ -91,23 +78,12 @@ function surfaceDeclaree(value) {
   return Number.isFinite(surface) && surface >= min && surface <= max ? surface : null
 }
 
+const TYPES_CONNUS = new Set(['maison', 'appartement', 'terrain', 'local'])
+const typeRecu = (value) => (TYPES_CONNUS.has(value) ? value : null)
+
 /**
- * Ce que le calcul a reconnu du bien, en plus de son prix.
- *
- * À la différence de `meta`, ce bloc descend toujours au front : il ne raconte
- * pas comment le montant a été obtenu — ce qui reste du diagnostic — mais dit
- * quelles caractéristiques les bases connaissaient déjà, pour que le formulaire
- * qui suit cesse de les demander.
- *
- * `detected` est aussi important que `value` : sans lui, un `null` de champ non
- * détecté ne se distinguerait pas d'un champ détecté vide, et le formulaire ne
- * saurait pas s'il doit poser la question.
- *
- * La règle est la même pour les deux champs — n'annoncer une détection que
- * lorsque la donnée est lue, jamais présumée. Un type de confiance moyenne est
- * assez bon pour le calcul, qui a de toute façon besoin d'un type ; il ne l'est
- * pas pour une caractéristique que l'agent verra ensuite figurer au rapport
- * sans jamais l'avoir déclarée.
+ * Ce que le calcul a reconnu du bien, en plus de son prix — le formulaire s'en
+ * sert pour cesser de redemander ce qui est déjà su. Inchangé.
  */
 function detectionUtile({ type, confiance, classeEnergie }) {
   const typeFiable = estTypeFiable({ type, confiance })
@@ -118,118 +94,54 @@ function detectionUtile({ type, confiance, classeEnergie }) {
   }
 }
 
-/**
- * Caractéristiques transmises par le formulaire, ou objet vide.
- *
- * Absentes du premier appel — l'analyse précède le formulaire —, présentes au
- * second. Les photos du bien, elles, n'arrivent jamais jusqu'ici : le front les
- * retire de la charge utile (voir `sansPhotos` dans `src/lib/estimation.js`),
- * elles ne pèsent sur aucun calcul et se compteraient en mégaoctets.
- */
+/** Caractéristiques transmises par le formulaire, ou objet vide. */
 const lireCaracteristiques = (valeur) =>
   valeur && typeof valeur === 'object' && !Array.isArray(valeur) ? valeur : {}
 
-/**
- * Ajustements sous une forme lisible dans un journal : « +5 % » plutôt que
- * « 0.05 », et la ligne de total à côté du détail.
- */
+/** Ajustements sous une forme lisible dans un journal. */
 const traceAjustements = ({ coefficient, brut, plafonne, details }) => ({
   total: `${(coefficient * 100).toFixed(1)} %`,
   ...(plafonne ? { avantPlafond: `${(brut * 100).toFixed(1)} %` } : {}),
-  detail: details.map((d) => `${d.id} ${d.coefficient > 0 ? '+' : ''}${(d.coefficient * 100).toFixed(1)} %`),
+  detail: details.map(
+    (d) => `${d.id} ${d.coefficient > 0 ? '+' : ''}${(d.coefficient * 100).toFixed(1)} %`,
+  ),
 })
-
-/** Bornes du montant renvoyé — au-delà, le calcul relève de la donnée aberrante. */
-const PRICE_RANGE = [15000, 20000000]
-
-const clampPrice = (value) => Math.min(Math.max(value, PRICE_RANGE[0]), PRICE_RANGE[1])
-
-/**
- * Le montant est arrondi au millier : une estimation au dernier euro
- * afficherait une précision qu'elle n'a pas.
- */
-const round = (value) => Math.round(value / 1000) * 1000
 
 function badRequest(res, message) {
   return res.status(400).json({ ok: false, error: message })
 }
 
 /**
- * Prix de référence, quand aucune vente comparable ne peut être trouvée.
+ * Réponse d'indisponibilité — 503, jamais un prix de consolation.
  *
- * Sur les trois départements du livre foncier — Moselle, Bas-Rhin, Haut-Rhin —
- * ce repli n'est pas un filet de secours mais le calcul ordinaire : DVF n'y
- * publiera jamais rien (voir `_lib/alsaceMoselle.js`). Le niveau départemental
- * y est donc modulé par le niveau de vie médian de la commune, seule source
- * ouverte qui couvre ce territoire à cette échelle — un repère communal plutôt
- * qu'un même chiffre pour tout un département.
- *
- * Une surcharge communale posée par l'agence (`ESTIMATION_PRIX_M2`) échappe à
- * cette modulation : elle est déjà locale, et la corriger d'un indice
- * reviendrait à discuter le chiffre de celui qui connaît le marché.
+ * C'est le contrat du moteur d'Immovia : une source DVF injoignable après ses
+ * réessais ne produit pas de montant. Le front de Barnes traite ce cas comme
+ * tout échec d'appel — prix nul, et le rapport le dit sur sa page « Estimation
+ * de valeur » — sans qu'aucun écran ait eu à changer.
  */
-async function referenceLocale({ codeInsee, departement, type }, { signal }) {
-  const base = prixReference({ codeInsee, departement, type })
-  const nu = { ...base, count: 0, radiusM: null }
+function indisponible(res, motif, journal, startedAt, error) {
+  const echecs = journal.filter((f) => f.issue === 'echec')
 
-  if (base.source === 'reference-commune' || !estLivreFoncier(departement)) return nu
+  console.error(
+    '[estimation] indisponible',
+    JSON.stringify({
+      motif,
+      message: error?.message ?? null,
+      fichiers: journal.length,
+      echecs: echecs.length,
+      tentatives: journal.reduce((somme, f) => somme + f.tentatives, 0),
+      detail: journal,
+      elapsedMs: Date.now() - startedAt,
+    }),
+  )
 
-  const affine = await prixLivreFoncier(
-    { codeInsee, departement, type, ancre: base.pricePerM2 },
-    { signal },
-  ).catch(() => null)
-
-  if (!affine) return nu
-
-  return {
-    pricePerM2: affine.pricePerM2,
-    source: affine.source,
-    count: 0,
-    radiusM: null,
-    indice: affine.indice?.indice ?? null,
-  }
-}
-
-/**
- * Prix au m² retenu, selon la meilleure source disponible — et repli en
- * cascade jusqu'à ce qu'il y en ait une.
- */
-async function resolvePricePerM2({ lat, lon, type, departement, codeInsee }, { signal }) {
-  const reference = () => referenceLocale({ codeInsee, departement, type }, { signal })
-
-  // Départements sans aucune donnée DVF (Alsace-Moselle, Mayotte) : inutile de
-  // dérouler l'élargissement, il ne trouvera rien. Le prix de référence y est le
-  // calcul ordinaire, et non un repli.
-  if (!departement || estHorsCouvertureDvf(departement)) return reference()
-
-  // Plus d'échéance propre à l'étape DVF : le chargement tranche millésime par
-  // millésime, avec son délai et ses réessais (voir `_lib/dvf.js`). Seul le
-  // budget global de l'appel subsiste au-dessus.
-  const comparables = await findComparables({ lat, lon, type, departement }, { signal })
-
-  if (comparables.pricePerM2) {
-    return {
-      pricePerM2: comparables.pricePerM2,
-      source: 'dvf',
-      count: comparables.sales.length,
-      radiusM: comparables.radiusM,
-    }
-  }
-
-  // Aucune vente comparable, même après élargissement maximal : on retombe sur
-  // la médiane de tout le département. Ce repli-ci reste légitime — les
-  // millésimes sont bien là, c'est le voisinage qui est muet.
-  const fallback = await departementPricePerM2(departement, type, { signal })
-  if (fallback.pricePerM2) {
-    return {
-      pricePerM2: fallback.pricePerM2,
-      source: 'dvf-departement',
-      count: fallback.count,
-      radiusM: null,
-    }
-  }
-
-  return reference()
+  res.setHeader('Cache-Control', 'no-store')
+  return res.status(503).json({
+    ok: false,
+    error: 'Estimation momentanément indisponible.',
+    code: 'dvf-indisponible',
+    motif,
+  })
 }
 
 export default async function handler(req, res) {
@@ -241,39 +153,42 @@ export default async function handler(req, res) {
   const body = req.body && typeof req.body === 'object' ? req.body : {}
   const lat = Number(body.lat)
   const lon = Number(body.lon)
+  const characteristics = lireCaracteristiques(body.characteristics)
 
-  // Monaco d'abord, et avant même la vérification des coordonnées : elles ne
-  // serviraient à rien ici — ni commune INSEE, ni département, ni millésime DVF
-  // ne répondraient de l'autre côté de la frontière. Le barème monégasque tient
-  // en une constante et une surface déclarée ; il n'y a rien à aller chercher,
-  // donc rien qui puisse échouer ni prendre du temps.
+  // L'étage voyage dans le formulaire côté Barnes, là où Immovia le porte à la
+  // racine de la requête. C'est une différence de forme, pas de calcul.
+  const etageDeclare = characteristics.etage ?? body.etage
+
+  // ------------------------------------------------------------------
+  // Monaco — aucune source n'y publie, le barème tient en une constante.
+  // ------------------------------------------------------------------
   if (body.monaco === true) {
     const type = body.type === 'maison' ? 'maison' : 'appartement'
     const declaree = surfaceDeclaree(body.surfaceM2)
     const surfaceM2 = declaree ?? SURFACE_PAR_DEFAUT[type]
 
-    // Les caractéristiques déclarées ajustent le barème monégasque comme elles
-    // ajustent la médiane française : un bien à rénover se négocie partout,
-    // et le prix au m² de référence décrit ici aussi un bien moyen.
-    const ajustements = ajustementsPrix(lireCaracteristiques(body.characteristics))
+    const etage = type === 'appartement' ? normaliseEtage(etageDeclare) : null
+    const prixBase = MONACO_PRICE_PER_M2 * coefficientEtage(etage)
 
-    // Pas de bornage ici, contrairement au calcul français : les deux facteurs
-    // sont déjà bornés — la surface par le curseur (10 à 800 m²), le prix au m²
-    // par une constante. Le produit tient de lui-même entre 575 000 € et 46 M€,
-    // et le plafond français (20 M€) écrêterait une villa monégasque de grande
-    // surface sur un montant qui, lui, n'a rien d'aberrant. L'ajustement est
-    // lui-même plafonné à ±15 %, il ne peut pas en sortir.
-    const calcule = round(MONACO_PRICE_PER_M2 * surfaceM2 * (1 + ajustements.coefficient))
-    // Dernière étape, après le barème et les ajustements : voir .
-    const price = prixDePresentation(calcule)
+    const { montant, ajustements, annexes } = appliqueAjustementsBarnes({
+      prixBase: prixBase * surfaceM2,
+      prixM2Base: prixBase,
+      surfaceM2,
+      characteristics,
+    })
+
+    const price = prixDePresentation(montantAffichable(montant))
 
     const meta = {
       type,
       surfaceM2,
       surfaceSource: declaree ? 'declaree' : 'defaut',
+      etage,
+      coefficientEtage: coefficientEtage(etage),
       pricePerM2: MONACO_PRICE_PER_M2,
       source: 'monaco-imsee',
       ajustements: traceAjustements(ajustements),
+      annexes: annexes.details.map((d) => `${d.id} ${d.surfaceM2} m²`),
     }
 
     console.log('[estimation]', JSON.stringify(meta))
@@ -282,11 +197,6 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       price,
-      // Le `type` retenu juste au-dessus est une coercition, pas une lecture :
-      // il ramène à « appartement » tout ce qui n'est pas « maison », faute de
-      // quoi le barème n'aurait rien à multiplier. C'est donc la détection
-      // faite côté carte qui est jugée ici, pas lui. Aucune classe énergie
-      // n'est cherchée à Monaco : la BDNB s'arrête à la frontière.
       detection: detectionUtile({
         type: body.type,
         confiance: body.typeConfiance,
@@ -305,33 +215,32 @@ export default async function handler(req, res) {
   const budget = setTimeout(() => controller.abort(), BUDGET_MS)
   const signal = controller.signal
   const startedAt = Date.now()
-
-  const characteristics = lireCaracteristiques(body.characteristics)
+  const journal = []
 
   try {
-    // Le type est normalement détecté côté carte et transmis tel quel ; on ne
-    // le recalcule que s'il manque — détection interrompue par une validation
-    // rapide, ou réseau capricieux au moment du clic.
-    //
-    // La confiance voyage avec le type, et pour une seule raison : le
-    // formulaire de caractéristiques ne reprend le type détecté qu'à condition
-    // qu'il ait été lu dans une base, pas déduit. Sans elle, la réponse ne
-    // saurait pas distinguer les deux.
-    let type = body.type
+    // Le type est normalement détecté côté carte et transmis tel quel. Le type
+    // déclaré au formulaire passe devant quand il existe : l'agent a tranché.
+    let type = typeRecu(characteristics.typeBien) ?? typeRecu(body.type)
     let confiance = typeof body.typeConfiance === 'string' ? body.typeConfiance : null
+
     if (!type) {
       const detected = await detectPropertyType(
         { kind: body.kind ?? 'batiment', lat, lon, areaM2: body.areaM2, properties: body.properties },
         { signal },
       ).catch(() => null)
-      type = detected?.type ?? 'autre'
+      type =
+        typeRecu(detected?.type) ??
+        arbitreTypeResidentiel({
+          niveaux: body.properties?.nombre_d_etages,
+          hauteur: body.properties?.hauteur,
+          areaM2: body.areaM2,
+        }).type
       confiance = detected?.confiance ?? 'nulle'
     }
 
-    // Ce que le front a déjà appris en repérant le bâtiment. Rien n'est pris
-    // au mot : chaque champ est vérifié, et tout ce qui manque ou détonne est
-    // retrouvé côté serveur — la charge utile vient du navigateur.
     const record = (value) => (value && typeof value === 'object' ? value : null)
+    const parcelle = record(body.parcelle)
+    const contenance = Number(body.contenance) || parcelle?.contenance || null
 
     const selection = {
       lat,
@@ -340,135 +249,276 @@ export default async function handler(req, res) {
       areaM2: Number(body.areaM2) || null,
       surfaceM2: surfaceDeclaree(body.surfaceM2),
       properties: record(body.properties),
-      parcelle: record(body.parcelle),
-      // Fiche BDNB du bâtiment : sa présence dispense de refaire la chaîne
-      // cadastre → BDNB, soit deux à trois secondes de moins sur le calcul.
+      parcelle,
       fiche: record(body.fiche),
-      contenance: Number(body.contenance) || null,
+      contenance,
       batimentGroupeId:
         typeof body.batimentGroupeId === 'string' ? body.batimentGroupeId : null,
     }
 
-    // Rattachement administratif d'abord : c'est lui qui désigne le fichier DVF
-    // à ouvrir, et il coûte une requête légère quand le front ne l'a pas déjà
-    // transmis. Le front l'a presque toujours — la parcelle est identifiée dès
-    // l'ouverture de la fenêtre de confirmation, pendant que l'utilisateur lit.
     const codeInsee =
-      body.parcelle?.codeInsee ?? (await communeAtPoint(lat, lon, { signal }).catch(() => null))
+      parcelle?.codeInsee ?? (await communeAtPoint(lat, lon, { signal }).catch(() => null))
     const departement = departementFromInsee(codeInsee)
 
-    // Étapes A et B en parallèle : les caractéristiques du bien et le marché
-    // local ne dépendent pas l'une de l'autre. Les enchaîner doublerait le
-    // temps de réponse pour rien.
-    const [bien, prix] = await Promise.all([
-      describeBien(selection, { signal }).catch(() => ({
-        surfaceM2: null,
-        surfaceSource: 'aucune',
-        anneeConstruction: null,
-        classeEnergie: null,
-        codeInsee: null,
-      })),
-      resolvePricePerM2({ lat, lon, type, departement, codeInsee }, { signal }),
+    const etage = type === 'appartement' ? normaliseEtage(etageDeclare) : null
+    const coefficientEtageApplique = coefficientEtage(etage)
+
+    // Le terrain de la cible est la contenance cadastrale, et le moteur ne la
+    // valorise que pour une maison.
+    const terrainCible = type === 'maison' ? Number(contenance) || null : null
+
+    const bienDecrit = describeBien(selection, { signal }).catch(() => ({
+      surfaceM2: null,
+      surfaceSource: 'aucune',
+      anneeConstruction: null,
+      classeEnergie: null,
+      codeInsee: null,
+    }))
+
+    // ------------------------------------------------------------------
+    // Zones hors couverture DVF (57, 67, 68, 976).
+    // ------------------------------------------------------------------
+    if (!departement || estHorsCouvertureDvf(departement)) {
+      const bien = await bienDecrit
+      const surfaceM2 =
+        selection.surfaceM2 ??
+        bien.surfaceM2 ??
+        SURFACE_PAR_DEFAUT[type] ??
+        SURFACE_PAR_DEFAUT.maison
+
+      const reference = majoreHorsDvf(
+        prixReference({ codeInsee, departement, type, lat, lon }),
+        departement,
+      )
+
+      const prixM2Base = reference.pricePerM2 * coefficientEtageApplique
+      const { montant, ajustements, annexes } = appliqueAjustementsBarnes({
+        prixBase: prixM2Base * surfaceM2,
+        prixM2Base,
+        surfaceM2,
+        characteristics,
+      })
+
+      const price = prixDePresentation(montantAffichable(montant))
+
+      const meta = {
+        type,
+        surfaceM2,
+        surfaceSource: selection.surfaceM2 ? 'declaree' : bien.surfaceSource,
+        surfaceEstimee: bien.surfaceM2,
+        anneeConstruction: bien.anneeConstruction,
+        classeEnergie: bien.classeEnergie,
+        typeConfiance: confiance,
+        etage,
+        coefficientEtage: coefficientEtageApplique,
+        codeInsee,
+        departement,
+        pricePerM2: Math.round(reference.pricePerM2),
+        pricePerM2Base:
+          reference.pricePerM2Base != null ? Math.round(reference.pricePerM2Base) : null,
+        majorationAppliquee: reference.majorationAppliquee ?? false,
+        source: reference.source,
+        pointNom: reference.pointNom ?? null,
+        pointDistanceM: reference.pointDistanceM ?? null,
+        confiance: 'faible',
+        ajustements: traceAjustements(ajustements),
+        annexes: annexes.details.map((d) => `${d.id} ${d.surfaceM2} m²`),
+        elapsedMs: Date.now() - startedAt,
+      }
+
+      console.log('[estimation]', JSON.stringify(meta))
+
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        ok: true,
+        price,
+        detection: detectionUtile({ type, confiance, classeEnergie: bien.classeEnergie }),
+        ajustements,
+        ...(process.env.ESTIMATION_DEBUG ? { meta } : {}),
+      })
+    }
+
+    // ------------------------------------------------------------------
+    // Zones couvertes par DVF — chargement, puis appel du moteur.
+    // ------------------------------------------------------------------
+    const dvfDeadline = AbortSignal.timeout(CHARGEMENT.budgetTotalMs)
+    const dvfSignal = AbortSignal.any([signal, dvfDeadline])
+
+    const [bien, essentiel] = await Promise.all([
+      bienDecrit,
+      chargeDepartement(departement, { signal: dvfSignal, journal }),
     ])
 
-    // La surface déclarée passe avant celle qu'ont reconstituée les bases : elle
-    // est la seule à avoir été vue de l'intérieur. Le calcul de `describeBien`
-    // n'est pas pour autant inutile — il tourne en parallèle de la recherche
-    // DVF, sans coût de temps propre, et renseigne le journal.
     const surfaceM2 =
       selection.surfaceM2 ?? bien.surfaceM2 ?? SURFACE_PAR_DEFAUT[type] ?? SURFACE_PAR_DEFAUT.maison
 
-    // Le produit médiane × surface décrit le bien moyen du secteur ; les
-    // caractéristiques déclarées l'en écartent, modérément et sous plafond
-    // (voir `_lib/ajustements.js`). Nul au premier appel, qui ne connaît pas
-    // encore le formulaire.
-    const ajustements = ajustementsPrix(characteristics)
+    const cible = {
+      lat,
+      lon,
+      type,
+      surfaceM2,
+      contenance: terrainCible,
+      etage,
+      codeInsee,
+      departement,
+    }
 
-    const raw = prix.pricePerM2 * surfaceM2 * (1 + ajustements.coefficient)
+    let ventes = essentiel.ventes
+    const departements = [departement]
+    const millesimesEnEchec = [...essentiel.millesimesEnEchec]
+    const echecsNonEssentiels = []
 
-    // Surfaces annexes — cave, rooftop, jardin privatif. Elles s'ajoutent
-    // **après** le plafond de cumul des ajustements et restent donc hors de
-    // lui : ce ne sont pas des nuances sur le même bien, ce sont des mètres
-    // carrés en plus (voir `_lib/annexes.js`). Elles se valorisent contre le
-    // prix au m² déjà ajusté, de sorte qu'un bien rénové voie aussi sa cave
-    // mieux valorisée. Sans aucune déclarée, le montant est nul et le prix
-    // reste exactement celui d'avant.
-    const annexes = valeurAnnexes(characteristics, prix.pricePerM2 * (1 + ajustements.coefficient))
+    let marche = estime({ bien: cible, ventes })
 
-    const calcule = clampPrice(round(raw + annexes.montant))
-    // Dernière étape, après le moteur, les ajustements et les annexes : voir
-    // `_lib/presentation.js`. Le prix au m² affiché et la fourchette se
-    // déduisent du montant, et suivent donc sans traitement propre.
-    const price = prixDePresentation(calcule)
+    // Le moteur dit de quels rayons il aurait eu besoin ; on va les chercher,
+    // du plus resserré au plus large, et on le rappelle.
+    const sondes = new Set()
+
+    for (;;) {
+      const rayon = marche.rayonsASonderM.find((r) => !sondes.has(r))
+      if (rayon == null) break
+      sondes.add(rayon)
+
+      const voisins = await chargeVoisins(lat, lon, rayon, {
+        exclure: departements,
+        signal: dvfSignal,
+        journal,
+      })
+
+      echecsNonEssentiels.push(...voisins.echecs)
+      if (voisins.ventes.length === 0) continue
+
+      departements.push(...voisins.departements)
+      ventes = [...ventes, ...voisins.ventes]
+      marche = estime({ bien: cible, ventes })
+    }
+
+    if (!marche.prix) {
+      return indisponible(res, 'aucune-vente-du-type', journal, startedAt)
+    }
+
+    if (marche.etape === 'departement') {
+      console.warn(
+        '[estimation] repli départemental',
+        JSON.stringify({ departement, codeInsee, type, departements, ventes: ventes.length }),
+      )
+    }
+
+    // --- Couche Barnes, puis majoration. Le moteur a fini son travail.
+    const { montant, ajustements, annexes } = appliqueAjustementsBarnes({
+      prixBase: marche.prix,
+      // Le prix au m² du moteur porte déjà l'étage et l'ajustement de terrain,
+      // puisqu'il est ramené du montant qu'il a établi.
+      prixM2Base: marche.prix / surfaceM2,
+      surfaceM2,
+      characteristics,
+    })
+
+    const price = prixDePresentation(montantAffichable(montant))
+    const echecs = journal.filter((f) => f.issue === 'echec')
 
     const meta = {
       type,
+      typeSource: characteristics.typeBien ? 'formulaire' : (body.type ? 'front' : 'detection'),
+      typeConfiance: confiance,
+
       surfaceM2,
       surfaceSource: selection.surfaceM2 ? 'declaree' : bien.surfaceSource,
-      // Conservée à côté de la surface retenue : c'est l'écart entre les deux
-      // qui dira si la reconstitution géométrique vise juste.
       surfaceEstimee: bien.surfaceM2,
       anneeConstruction: bien.anneeConstruction,
       classeEnergie: bien.classeEnergie,
-      typeConfiance: confiance,
+      contenance: terrainCible,
+      etage,
+      coefficientEtage: marche.coefficientEtage,
+
       codeInsee,
       departement,
-      pricePerM2: Math.round(prix.pricePerM2),
-      source: prix.source,
-      // Renseigné sur le seul territoire du livre foncier : l'indice de niveau
-      // de vie qui a écarté le repère communal du niveau départemental.
-      ...(prix.indice ? { indiceCommune: prix.indice } : {}),
-      comparables: prix.count,
-      radiusM: prix.radiusM ?? null,
-      // Le détail des ajustements appliqués, ligne à ligne : c'est par lui que
-      // l'on vérifie qu'un prix sorti différent de son voisin l'est pour une
-      // raison qu'on peut nommer.
+      source: marche.statut === 'departement' ? 'dvf-departement' : 'dvf',
+      etape: marche.etape,
+      confiance: marche.confiance,
+      pricePerM2: Math.round(marche.prixM2),
+      rayonAtteintM: marche.rayonAtteintM,
+      comparablesRetenus: marche.comparables.length,
+
+      indice: {
+        zone: marche.indice.zone,
+        zoneCode: marche.indice.zoneCode,
+        echelle: marche.indice.echelle,
+        semestreReference: marche.indice.semestreReference,
+        motif: marche.indice.motif,
+        points: marche.indice.points,
+      },
+
+      candidats: marche.candidats,
+      repli: marche.repli,
+      terrain: marche.terrain,
+      decomposition: marche.decomposition,
+
+      // Les bornes et le niveau de confiance du moteur restent au journal : le
+      // contrat de sortie du front Barnes ne les porte pas, et il n'a pas été
+      // touché.
+      fourchetteMoteur: marche.fourchette,
+
+      comparables: marche.comparables.map((v) => ({
+        adresse: v.adresse,
+        date: v.date,
+        commune: v.commune,
+        surfaceM2: v.surface,
+        terrainM2: v.surfaceTerrain,
+        terrainConnu: v.terrainConnu,
+        valeurFonciere: v.price,
+        prixM2Brut: Math.round(v.pricePerM2),
+        coefficientTemps: Number(v.coefficientTemps.toFixed(4)),
+        prixM2Actualise: Math.round(v.prixM2Actualise),
+        distanceM: Math.round(v.distanceM),
+        similarite: v.similarite,
+        poids: Number(v.poids.toFixed(4)),
+      })),
+
+      // Ce que la couche Barnes a ajouté par-dessus, et dans quel ordre.
+      prixMoteur: marche.prix,
       ajustements: traceAjustements(ajustements),
-      prixAvantAjustements: Math.round(prix.pricePerM2 * surfaceM2),
-      // Surfaces annexes retenues, et ce qu'elles pèsent — au journal
-      // seulement : le rapport les nomme sans les chiffrer.
       annexes: {
         surfacePonderee: Number(annexes.surfacePonderee.toFixed(2)),
         montant: Math.round(annexes.montant),
         detail: annexes.details.map((d) => `${d.id} ${d.surfaceM2} m²`),
       },
+      prixAvantMajoration: montantAffichable(montant),
+
+      chargement: {
+        departements,
+        fichiers: journal.length,
+        echecs: echecs.length,
+        millesimesEnEchec,
+        echecsNonEssentiels,
+        tentatives: journal.reduce((somme, f) => somme + f.tentatives, 0),
+        detail: journal,
+      },
+
       elapsedMs: Date.now() - startedAt,
     }
 
     console.log('[estimation]', JSON.stringify(meta))
 
-    // Le détail du calcul n'a pas à redescendre : l'utilisateur ne doit rien
-    // percevoir d'un élargissement de rayon ou d'un repli. Il reste accessible
-    // pour le diagnostic en activant `ESTIMATION_DEBUG`.
     res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json({
       ok: true,
       price,
       detection: detectionUtile({ type, confiance, classeEnergie: bien.classeEnergie }),
-      // Ce bloc-ci descend toujours, à la différence de `meta` : le rapport
-      // affiche le détail des ajustements sous le montant, et un prix qu'on ne
-      // sait pas décomposer est un prix que l'agent ne peut pas défendre.
       ajustements,
       ...(process.env.ESTIMATION_DEBUG ? { meta } : {}),
     })
   } catch (error) {
-    // Un millésime DVF introuvable après ses trois tentatives : pas de prix.
-    // C'est le renversement que ce correctif apporte — l'ancienne version
-    // retombait ici sur un barème statistique, et le montant qui s'affichait
-    // était indiscernable d'un montant calculé sur des ventes voisines.
     if (error instanceof DvfIndisponible) {
-      console.error('[estimation] indisponible —', error.message)
-      res.setHeader('Cache-Control', 'no-store')
-      return res.status(503).json({
-        ok: false,
-        error: 'Estimation momentanément indisponible.',
-        code: 'dvf-indisponible',
-        motif: error.key,
-      })
+      return indisponible(res, error.key, journal, startedAt, error)
+    }
+
+    if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
+      return indisponible(res, 'budget-depasse', journal, startedAt, error)
     }
 
     console.error('[estimation] Échec du calcul', error)
-    return res.status(500).json({ ok: false, error: 'Estimation indisponible.' })
+    return res.status(500).json({ ok: false, error: 'Estimation indisponible.', code: 'erreur' })
   } finally {
     clearTimeout(budget)
   }
